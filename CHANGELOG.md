@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.1 — 2026-11-01
+
+### Fixed
+
+- Check out the source tree in the release job so tagged releases can read the
+  changelog and publish successfully.
+
 ## v0.1.0 — 2026-11-01
 
 First public release.
