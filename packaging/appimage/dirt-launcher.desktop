@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Colin McRae: DiRT Launcher
+Comment=Play your own DiRT (2007) with modern compatibility fixes
+Exec=dirt-play
+Icon=dirt-launcher
+Terminal=false
+Categories=Game;
