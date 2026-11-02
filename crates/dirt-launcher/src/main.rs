@@ -33,9 +33,10 @@ mod app {
     use std::process::Command;
 
     use dirt_launcher::config::{self, Settings};
-    use dirt_launcher::form::Picture;
+    use dirt_launcher::display::Fallback;
+    use dirt_launcher::plan::{self, Env};
     use dirt_launcher::runtime::DXVK_MARKER;
-    use dirt_launcher::{display, edition, hardware, patches, runtime};
+    use dirt_launcher::{edition, hardware, runtime};
     use rea_launcher::log::Log;
     use rea_launcher::{cfg, fsx, identify, paths};
     use rea_launcher_win32::report::{self, Mode};
@@ -119,12 +120,6 @@ mod app {
         ))
     }
 
-    fn take_flag(args: &mut Vec<String>, flag: &str) -> bool {
-        let found = args.iter().any(|arg| arg == flag);
-        args.retain(|arg| arg != flag);
-        found
-    }
-
     /// Copy the bundled DXVK d3d9.dll next to the runtime exe (Linux only).
     fn configure_dxvk(runtime: &Path, linux: bool) -> Result<(), String> {
         let marker = runtime.join(DXVK_MARKER);
@@ -158,17 +153,31 @@ mod app {
     pub fn run() -> Result<u32, String> {
         log_line(concat!("DiRTLauncher ", env!("CARGO_PKG_VERSION")));
         let settings_path = settings_path();
-        let mut cli: Vec<String> = std::env::args().skip(1).collect();
-        if take_flag(&mut cli, "--help") {
-            command(config::USAGE);
-            return Ok(0);
+        // Validated up front, so a typo is reported even when the window
+        // opens instead of playing.
+        let cli = match Settings::parse_args(std::env::args().skip(1)) {
+            Ok(cli) => cli,
+            Err(message) if message == config::usage() => {
+                command(&message);
+                return Ok(0);
+            }
+            Err(message) => return Err(message),
+        };
+        let settings_only = cli.has("--settings");
+        let linux = cli.has("--linux");
+        let no_window = cli.has("--no-window");
+        let check_only = cli.has("--check");
+        let setup_only = cli.has("--setup");
+        if settings_only && cli.options_given() {
+            return Err(
+                "--settings opens the window and takes no other options; save them in the \
+                 window or launcher.cfg"
+                    .to_string(),
+            );
         }
-        let settings_only = take_flag(&mut cli, "--settings");
-        let linux = take_flag(&mut cli, "--linux");
-        let no_window = take_flag(&mut cli, "--no-window");
-        let check_only = take_flag(&mut cli, "--check");
-        let setup_only = take_flag(&mut cli, "--setup");
-        if settings_only || (cli.is_empty() && !no_window && !check_only && !setup_only) {
+        let wants_window =
+            settings_only || (!cli.options_given() && !no_window && !check_only && !setup_only);
+        if wants_window {
             if wine::is_wine() {
                 match gpu::prefer_glx() {
                     Ok(true) => log_line("Wine settings window: OpenGL through GLX (UseEGL=N)"),
@@ -198,17 +207,25 @@ mod app {
         }
 
         let existing = cfg::read_file(&settings_path).ok().flatten();
-        let file_text = existing.as_deref().unwrap_or(config::TEMPLATE);
+        let template = config::template();
+        let file_text = existing.as_deref().unwrap_or(&template);
         let (saved, warnings) = Settings::parse_file(file_text);
         for warning in warnings {
             log_line(&format!("warning: {warning}"));
         }
-        let settings = saved.clone().merged(Settings::parse_args(cli)?);
+        let settings = saved.clone().merged(cli.settings.clone());
         let game = find_game(&settings)?;
         let exe_path = game.join(edition::EXE);
         let exe_bytes = fs::read(&exe_path)
             .map_err(|error| format!("cannot read {}: {error}", exe_path.display()))?;
-        let detected = edition::identify(&exe_bytes).map_err(|digest| edition::refusal(&digest))?;
+        let detected = edition::identify(&exe_bytes).map_err(|digest| {
+            log_line(&format!(
+                "{}: unknown build, SHA-256 {}",
+                edition::EXE,
+                identify::hex(&digest)
+            ));
+            edition::refusal(&digest)
+        })?;
         log_line(&format!(
             "game: {} ({}, SHA-256 {})",
             game.display(),
@@ -217,7 +234,7 @@ mod app {
         ));
         if check_only {
             command(&format!(
-                "Ready to set up.\n\nGame folder: {}\nVersion: {}",
+                "Ready to play.\n\nGame folder: {}\nVersion: {}",
                 game.display(),
                 detected.name
             ));
@@ -245,71 +262,68 @@ mod app {
             synced.brought
         ));
 
-        // Large Address Aware: from the game folder's pristine bytes into
-        // the private copy, checked against the known result's SHA-256.
+        let screen = screen::screen_size();
+        let wine = wine::is_wine();
+        let env = Env {
+            wine,
+            linux,
+            gamescope: std::env::var_os("GAMESCOPE_WAYLAND_DISPLAY").is_some(),
+            screen,
+            mode_supported: true,
+            logical_cpus: std::thread::available_parallelism()
+                .map(usize::from)
+                .unwrap_or(4),
+            dll_overrides: std::env::var("WINEDLLOVERRIDES").ok(),
+            runtime: runtime_dir.display().to_string(),
+        };
+        let mut plan = plan::plan(&settings, &env);
+        if !wine {
+            let (width, height) = plan.picture.resolution.expect("resolved");
+            if !screen::mode_supported(width, height) {
+                plan = plan::plan(
+                    &settings,
+                    &Env {
+                        mode_supported: false,
+                        ..env.clone()
+                    },
+                );
+            }
+        }
+        let (width, height) = plan.picture.resolution.expect("resolved");
+        match plan.fallback {
+            None => {}
+            Some(Fallback::VirtualDesktop) => log_line(&format!(
+                "display: using an isolated Wine desktop at {width}x{height}"
+            )),
+            Some(Fallback::Portrait) => {
+                log_line("display fallback: the current monitor is portrait; playing windowed")
+            }
+            Some(Fallback::UnsupportedMode) => {
+                log_line("display fallback: no such fullscreen mode; playing windowed")
+            }
+        }
+
+        // Patches: from the game folder's pristine bytes into the private
+        // copy, every launch, each set's result checked by SHA-256.
         let runtime_exe = runtime_dir.join(edition::EXE);
-        let patched = patches::runtime_exe(&exe_bytes)
+        let patched = rea_launcher::patch::apply_sets(&exe_bytes, &plan.patches)
             .map_err(|error| format!("{}: Large Address Aware refused: {error}", edition::EXE))?;
         if fs::read(&runtime_exe).ok().as_deref() != Some(&patched[..]) {
             fsx::install(&runtime_exe, &patched)
-                .map_err(|error| format!("cannot enable Large Address Aware: {error}"))?;
+                .map_err(|error| format!("cannot write the private copy of DiRT.exe: {error}"))?;
             log_line("Large Address Aware enabled in the private runtime executable");
         }
 
-        let screen = screen::screen_size();
-        let mut picture = Picture {
-            resolution: settings.resolution,
-            aspect: settings.aspect,
-            quality: settings.effective_quality(),
-            fullscreen: settings.fullscreen.unwrap_or(true),
-            vsync: settings.vsync.unwrap_or(true),
-        }
-        .resolved(screen);
-        let wine = wine::is_wine();
-        let gamescope = std::env::var_os("GAMESCOPE_WAYLAND_DISPLAY").is_some();
-        let (width, height) = picture.resolution.unwrap();
-        let mode_supported = wine || screen::mode_supported(width, height);
-        let (fullscreen, fallback) = display::effective_fullscreen(
-            picture.fullscreen,
-            wine,
-            gamescope,
-            screen.is_some_and(|(width, height)| width < height),
-            mode_supported,
-        );
-        picture.fullscreen = fullscreen;
-        if let Some(reason) = fallback {
-            match reason {
-                display::Fallback::VirtualDesktop => log_line(&format!(
-                    "display: using an isolated Wine desktop at {width}x{height}"
-                )),
-                display::Fallback::Portrait => {
-                    log_line("display fallback: the current monitor is portrait; playing windowed")
-                }
-                display::Fallback::UnsupportedMode => {
-                    log_line("display fallback: no such fullscreen mode; playing windowed")
-                }
-            }
-        }
-        let logical_cpus = std::thread::available_parallelism()
-            .map(usize::from)
-            .unwrap_or(4);
-        let selection = hardware::configure_runtime(
-            &runtime_dir,
-            &picture,
-            settings.effective_workers(),
-            logical_cpus,
-        )?;
-        hardware::configure_user(&hardware::user_config_path(), &picture, selection)?;
-        configure_dxvk(&runtime_dir, linux)?;
+        hardware::configure_runtime(&runtime_dir, &plan.picture, plan.workers, env.logical_cpus)?;
+        hardware::configure_user(&hardware::user_config_path(), &plan.picture, plan.selection)?;
+        configure_dxvk(&runtime_dir, plan.install_dxvk)?;
         log_line(&format!(
-            "configured: {}x{} {}, {}, fullscreen {}, vsync {}, worker map {}",
-            picture.resolution.unwrap().0,
-            picture.resolution.unwrap().1,
-            picture.aspect.unwrap().key(),
-            picture.quality.key(),
-            picture.fullscreen,
-            picture.vsync,
-            selection.configured_cores
+            "configured: {width}x{height} {}, {}, fullscreen {}, vsync {}, worker map {}",
+            plan.picture.aspect.expect("resolved").key(),
+            plan.picture.quality.key(),
+            plan.picture.fullscreen,
+            plan.picture.vsync,
+            plan.selection.configured_cores
         ));
 
         if existing.is_none() || saved.game.as_ref() != Some(&game) {
@@ -317,7 +331,7 @@ mod app {
             fsx::write_atomic(&settings_path, text)
                 .map_err(|error| format!("cannot save {}: {error}", settings_path.display()))?;
         }
-        if !wine {
+        if plan.gpu_preference {
             match gpu::prefer_fast_gpu(&runtime_exe) {
                 Ok(true) => log_line("Windows high-performance GPU preference set"),
                 Ok(false) => {}
@@ -329,19 +343,12 @@ mod app {
             return Ok(0);
         }
 
-        let mut command = if matches!(fallback, Some(display::Fallback::VirtualDesktop)) {
-            let mut command = Command::new("explorer");
-            command
-                .arg(format!("/desktop=DiRT,{width}x{height}"))
-                .arg(&runtime_exe);
-            command
-        } else {
-            Command::new(&runtime_exe)
-        };
+        let mut command = Command::new(&plan.command[0]);
+        command.args(&plan.command[1..]);
         let status = command
             .current_dir(&runtime_dir)
             .status()
-            .map_err(|error| format!("cannot start {}: {error}", runtime_exe.display()))?;
+            .map_err(|error| format!("cannot start {}: {error}", plan.command.join(" ")))?;
         xinput::stop_rumble();
         let code = status.code().unwrap_or(1) as u32;
         log_line(&format!("game exited with {code}"));

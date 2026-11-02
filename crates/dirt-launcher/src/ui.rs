@@ -5,12 +5,13 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use dirt_launcher::config::{self, Quality, Workers};
+use dirt_launcher::config::{self, Aspect, Quality, Scaler, Workers};
 use dirt_launcher::edition;
 use dirt_launcher::form::{self, Form, Look, Picture};
-use rea_launcher::fsx;
-use rea_launcher_ui::egui::{self, Key, Rect, TextureHandle, vec2};
+use rea_launcher::{cfg, fsx};
+use rea_launcher_ui::egui::{self, Key, Rect, Response, TextureHandle, vec2};
 use rea_launcher_ui::pad::{self, Nav, PadNav};
+use rea_launcher_ui::spec::{RowOptions, mark_rendered, spec_row_with};
 use rea_launcher_ui::theme::{body, decal};
 use rea_launcher_ui::widgets::{self, CaptionStyle, Crop, LookCard};
 use rea_launcher_ui::window::Layout;
@@ -111,18 +112,13 @@ pub struct Window {
 
 impl Window {
     pub fn new(path: PathBuf, saved: Option<String>, host: Host) -> Window {
-        let form = match saved.as_deref() {
-            Some(text) if text != config::TEMPLATE => {
-                Form::new(&config::Settings::parse_file(text).0, host.screen)
-            }
-            _ => Form::first_run(host.screen),
-        };
-        let text = saved.unwrap_or_else(|| config::TEMPLATE.to_string());
+        let form = Form::from_file(saved.as_deref(), host.screen);
+        let text = saved.unwrap_or_else(config::template);
         let check = check_game(&form.game);
         Window {
             checked: form.game.clone(),
             check,
-            resolutions: form::resolutions(host.screen),
+            resolutions: form::resolutions(host.screen, form.picture.resolution),
             form,
             tab: Tab::Play,
             host,
@@ -256,19 +252,21 @@ impl Window {
     }
 
     fn play_tab(&mut self, ui: &mut egui::Ui) {
+        let game = config::option("game");
         widgets::heading(ui, "Game folder (official v1.22)");
+        mark_rendered(ui.ctx(), game.key);
         let hint = if self.host.linux {
             "The folder with DiRT.exe, e.g. Z:\\home\\you\\Games\\DiRT"
         } else {
             "The folder with your installed DiRT.exe"
         };
         let pick = &self.host.pick_folder;
-        if widgets::folder_field(ui, &mut self.form.game, "Game folder", hint, pick) {
+        if widgets::folder_field(ui, &mut self.form.game, game.label, hint, pick) {
             self.error = None;
         }
         match &self.check {
             Check::Empty => {
-                widgets::note(ui, "The source folder is only read, never changed.");
+                widgets::note(ui, game.description);
             }
             Check::Found(name) => {
                 ui.label(
@@ -284,23 +282,24 @@ impl Window {
         ui.add_space(10.0);
 
         widgets::heading(ui, "Look");
+        mark_rendered(ui.ctx(), "look");
         ui.add_space(6.0);
         let screen = self.host.screen;
-        let modern_note = match Picture::MODERN.resolved(screen).resolution {
-            Some((width, height)) => format!("{width}×{height}, Ultra and XInput."),
-            None => "Ultra graphics and native gamepad.".to_string(),
+        let modern = Picture::of(Look::Modern)
+            .expect("a preset")
+            .resolved(screen)
+            .resolution;
+        let modern_note = match modern {
+            Some((width, height)) => format!("{width}×{height}, Ultra."),
+            None => "Your screen's size, Ultra.".to_string(),
         };
         let cards = [
             (Look::Modern, "Modern", modern_note),
-            (
-                Look::SteamDeck,
-                "Steam Deck",
-                "1280×800, High, 60 Hz.".to_string(),
-            ),
+            (Look::SteamDeck, "Steam Deck", "1280×800, High.".to_string()),
             (
                 Look::Original,
                 "Original 2007",
-                "1280×720, Medium, 60 Hz.".to_string(),
+                "1280×720, Medium.".to_string(),
             ),
             (
                 Look::Custom,
@@ -317,11 +316,12 @@ impl Window {
                     title,
                     note: &note,
                     selected: self.form.look == look,
-                    badge: (look == Look::Modern).then_some("Recommended"),
+                    badge: (look == form::recommended(screen)).then_some("Recommended"),
                     ..LookCard::default()
                 };
-                if widgets::look_card(ui, vec2(width, 132.0), &card).clicked() {
-                    self.form.set_look(look, screen);
+                if widgets::look_card(ui, vec2(width, 116.0), &card).clicked() {
+                    self.form.set_look(look);
+                    self.refresh_resolutions();
                     if look == Look::Custom {
                         self.tab = Tab::Picture;
                     }
@@ -329,68 +329,68 @@ impl Window {
             }
         });
         ui.add_space(14.0);
-        widgets::heading(ui, "Modern-CPU compatibility");
-        ui.horizontal_top(|ui| {
-            widgets::field(ui, "Worker map");
-            widgets::chips(
-                ui,
-                &Workers::ALL.map(|workers| (workers, workers.label())),
-                &mut self.form.workers,
-                None,
-            );
-        });
-        widgets::note(
-            ui,
-            "Auto uses 4 workers below 8 CPU threads, 8 for 8–11, and 12 for 12+. \
-             No settings cache is deleted.",
-        );
+
+        widgets::heading(ui, "Modern CPUs");
+        if let Some(text) = table_row(ui, "workers", self.form.workers.key(), None)
+            && let Some(workers) = Workers::parse(&text)
+        {
+            self.form.workers = workers;
+        }
     }
 
+    fn refresh_resolutions(&mut self) {
+        self.resolutions = form::resolutions(self.host.screen, self.form.picture.resolution);
+    }
+
+    /// Picture: the screen size and shape, then detail, the display mode
+    /// and vsync, then the Linux helper's scaler.
     fn picture_tab(&mut self, ui: &mut egui::Ui) {
         let screen = self.host.screen;
         let mut picture = self.form.picture;
-        let row = |ui: &mut egui::Ui, name: &str, add: &mut dyn FnMut(&mut egui::Ui)| {
-            ui.horizontal_top(|ui| {
-                widgets::field(ui, name);
-                ui.vertical(|ui| add(ui));
-            });
-        };
-        row(ui, "Resolution", &mut |ui| {
-            widgets::chips(ui, &self.resolutions, &mut picture.resolution, None);
+        widgets::heading(ui, "Screen");
+        option_row(ui, "resolution", |ui| {
+            widgets::chips(ui, &self.resolutions, &mut picture.resolution, None)
         });
-        row(ui, "Aspect", &mut |ui| {
-            widgets::chips(ui, &form::ASPECTS, &mut picture.aspect, None);
-        });
-        row(ui, "Quality", &mut |ui| {
-            widgets::chips(
-                ui,
-                &Quality::ALL.map(|quality| (quality, quality.label())),
-                &mut picture.quality,
-                None,
+        let aspect = picture.aspect.map_or("auto", Aspect::key);
+        if let Some(text) = table_row(ui, "aspect", aspect, None) {
+            picture.aspect = Aspect::parse(&text);
+        }
+        let shown = picture.resolved(screen);
+        let (width, height) = shown.resolution.expect("resolved");
+        ui.horizontal(|ui| {
+            ui.add_space(rea_launcher_ui::theme::metrics(ui.ctx()).field_width);
+            ui.label(
+                egui::RichText::new(format!(
+                    "Runs at {width}×{height}, {}.",
+                    shown.aspect.expect("resolved").key()
+                ))
+                .font(body(14.0))
+                .color(GOLD),
             );
         });
-        row(ui, "", &mut |ui| {
-            widgets::toggle(ui, &mut picture.fullscreen, "Fullscreen", None);
-            widgets::toggle(ui, &mut picture.vsync, "Vsync (60 Hz)", None);
-        });
-        if self.host.linux {
-            let scaler = &mut self.form.scaler;
-            row(ui, "Scaler", &mut |ui| {
-                let options: Vec<_> = form::SCALERS
-                    .iter()
-                    .map(|scaler| (scaler.0, scaler.1))
-                    .collect();
-                widgets::chips(ui, &options, scaler, None);
-                let note = form::SCALERS
-                    .iter()
-                    .find(|option| option.0 == *scaler)
-                    .map_or("", |scaler| scaler.2);
-                widgets::note(ui, note);
-            });
+        ui.add_space(12.0);
+
+        widgets::heading(ui, "Detail");
+        if let Some(text) = table_row(ui, "quality", picture.quality.key(), None)
+            && let Some(quality) = Quality::parse(&text)
+        {
+            picture.quality = quality;
         }
-        if picture != self.form.picture {
-            self.form.picture = picture;
-            self.form.look = Form::look_of(&self.form.picture, screen);
+        if let Some(text) = table_row(ui, "fullscreen", cfg::on_off(picture.fullscreen), None) {
+            picture.fullscreen = text == cfg::on_off(true);
+        }
+        if let Some(text) = table_row(ui, "vsync", cfg::on_off(picture.vsync), None) {
+            picture.vsync = text == cfg::on_off(true);
+        }
+        self.form.edit_picture(picture, screen);
+        ui.add_space(8.0);
+
+        widgets::heading(ui, "Linux");
+        let disabled = form::scaler_disabled(self.host.linux);
+        if let Some(text) = table_row(ui, "scaler", self.form.scaler.key(), disabled)
+            && let Some(scaler) = Scaler::parse(&text)
+        {
+            self.form.scaler = scaler;
         }
     }
 
@@ -431,6 +431,42 @@ impl Window {
     }
 }
 
+/// One option's row drawn by the SDK from the option table
+/// (`spec_row_with`: label, control, description, the disabled reason)
+/// over the window's typed value, given as its `launcher.cfg` text; the
+/// new text when the player changed it.
+fn table_row(ui: &mut egui::Ui, key: &str, text: &str, disabled: Option<&str>) -> Option<String> {
+    let mut value = text.to_string();
+    let options = RowOptions {
+        disabled,
+        ..RowOptions::default()
+    };
+    let response = spec_row_with(ui, config::option(key), &mut value, options);
+    ui.add_space(6.0);
+    (response.changed() && value != text).then_some(value)
+}
+
+/// A row the SDK cannot draw from the table (the resolution: a `Size` row
+/// as chips of the screen's sizes), laid out as `spec_row_with` lays out a
+/// chip row: the label, the control, the description under them; the
+/// control is named and described for screen readers and the key is
+/// recorded for the parity test.
+fn option_row(ui: &mut egui::Ui, key: &str, control: impl FnOnce(&mut egui::Ui) -> Response) {
+    let spec = config::option(key);
+    mark_rendered(ui.ctx(), spec.key);
+    ui.vertical(|ui| {
+        let response = ui
+            .horizontal_top(|ui| {
+                widgets::field(ui, spec.label);
+                control(ui)
+            })
+            .inner;
+        widgets::name_control(&response, Some(spec.label), Some(spec.description));
+        widgets::note(ui, spec.description);
+    });
+    ui.add_space(6.0);
+}
+
 #[cfg(windows)]
 pub use native::show;
 
@@ -443,9 +479,6 @@ mod native {
     use rea_launcher_ui::window::{SIZE, WindowFit};
     use rea_launcher_win32::{dialog, display, wine, xinput};
     use std::time::Duration;
-
-    /// The window's title, which a second start brings forward.
-    pub const TITLE: &str = "Colin McRae: DiRT";
 
     struct App {
         window: Window,
@@ -474,7 +507,7 @@ mod native {
         let screen = display::screen_size();
         let fit = WindowFit::new(SIZE, wine, screen, native);
         let zoom = fit.zoom();
-        let options = fit.native_options(TITLE);
+        let options = fit.native_options(dirt_launcher::instance::WINDOW_TITLE);
         let host = Host {
             screen,
             linux,
@@ -486,7 +519,7 @@ mod native {
         let window = Window::new(settings_path.to_path_buf(), saved.map(str::to_string), host);
         let outcome = window.outcome.clone();
         eframe::run_native(
-            TITLE,
+            dirt_launcher::instance::WINDOW_TITLE,
             options,
             Box::new(move |cc| {
                 theme::install_with(&cc.egui_ctx, &PALETTE, &METRICS);

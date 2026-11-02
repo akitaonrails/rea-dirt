@@ -49,6 +49,9 @@ REA_SDL_SETTINGS=0
 REA_GAME_PROCS=DiRT.exe
 REA_WINDOWED_KEY=fullscreen       # fullscreen = off: no gamescope of our own
 REA_WINDOWED_VALUES="off false no 0"
+# Keys the helper reads itself: a play run's --scaler, --resolution or
+# --fullscreen (e.g. dirt-play --play --scaler fsr) applies to that run.
+REA_HELPER_KEYS="scaler resolution fullscreen"
 
 rea_init || exit 1
 # Tests load the configuration and hooks without running anything.

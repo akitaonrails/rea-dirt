@@ -3,5 +3,7 @@ pub mod display;
 pub mod edition;
 pub mod form;
 pub mod hardware;
+pub mod instance;
 pub mod patches;
+pub mod plan;
 pub mod runtime;

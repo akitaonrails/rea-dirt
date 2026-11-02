@@ -189,7 +189,9 @@ pub fn worker_map_xml(cores: u32) -> Result<String, String> {
     Ok(out)
 }
 
-const DEFAULT_CONFIG: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+/// The `hardware_settings_config.xml` the launcher starts from when the game
+/// folder has none (launcher-made, every value set by `configure_xml`).
+pub const DEFAULT_CONFIG: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <hardware_settings_config version="30">
   <cpu><threadStrategy /></cpu>
   <graphics_card>

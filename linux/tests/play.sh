@@ -75,6 +75,14 @@ for off in false off OFF no 0; do
     *) fail "fullscreen = $off: nothing ran" ;;
   esac
 done
+echo "# one-run flags reach gamescope and the launcher; launcher.cfg is not written"
+printf 'resolution = 3840x2160\nscaler = linear\n' > "$cfg"
+rm -f "$T/ran"; sh "$T/repo/linux/dirt-play" --play --scaler fsr --resolution=1280x720 > /dev/null 2>&1
+contains "--scaler/--resolution for one run" "$(cat "$T/ran" 2>/dev/null)" "-W 1280 -H 720 -w 1280 -h 720 -f -S fit -F fsr --"
+contains "the flags reach the launcher" "$(cat "$T/ran" 2>/dev/null)" "--no-window --linux --scaler fsr --resolution 1280x720"
+rm -f "$T/ran"; sh "$T/repo/linux/dirt-play" --play --fullscreen off > /dev/null 2>&1
+case "$(cat "$T/ran" 2>/dev/null)" in *gamescope*) fail "--fullscreen off must skip gamescope" ;; *) ok "--fullscreen off skips gamescope" ;; esac
+check "launcher.cfg unchanged" "$(cat "$cfg")" "$(printf 'resolution = 3840x2160\nscaler = linear')"
 rm -f "$cfg"
 
 echo "# tests source the script: REA_FUNCTIONS_ONLY=1 + REA_PLAY_HERE"

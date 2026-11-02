@@ -1,5 +1,42 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The launcher is built on [rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk)
+  v0.3.3: the private copy, `launcher.cfg`, the settings window, the Linux
+  helper (`dirt-play` on `rea-play.sh`), packaging and CI are the shared
+  family code. Your settings, the private copy and the Wine prefix from
+  v0.1.x keep working.
+- Every write into the private copy and `launcher.cfg` is a whole-file
+  swap: a crash can no longer leave a half-written file.
+- One option table makes `--help`, the `launcher.cfg` template and the
+  window. New flags: `--look modern|steam-deck|original|custom` (sets all
+  of a look's values for one run) and `--scaler` (the Linux helper's
+  gamescope filter, also for one run with `dirt-play --play --scaler fsr`).
+  `resolution` and `aspect` take `auto`. `--flag=value` works too.
+- The window saves the look you picked (`look = …`) and recommends the
+  Steam Deck look on a Deck. Every option shows a one-line description.
+- Large Address Aware is applied as a checked patch: the private
+  `DiRT.exe` must come out as the known Large Address Aware v1.22, byte for
+  byte.
+- `--help` and `--check` print to the terminal they were started from
+  (a dialog only when nobody sees one); errors also go to stdout, so
+  `dirt-play` and Proton logs have them.
+- An unknown `DiRT.exe` is refused with its SHA-256 and a link to report
+  it, in the window as well as on Play.
+- `dirt-play` keeps its commands and variables (`DIRT_GPU` is new);
+  `launcher.cfg` is looked for next to `DiRTLauncher.exe` only, no longer
+  in the folder above.
+
+### Fixed
+
+- A `launcher.cfg` saved in a Windows code page (Notepad's ANSI) is read
+  instead of being replaced by the template.
+- The private copy's overlap check failed under Windows path rules.
+- `launcher.log` is capped at 1 MiB.
+
 ## v0.1.1 — 2026-11-01
 
 ### Fixed
