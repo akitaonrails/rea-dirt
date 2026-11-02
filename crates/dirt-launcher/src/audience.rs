@@ -39,7 +39,10 @@ mod tests {
 
     #[test]
     fn a_windows_script_with_no_window_is_not() {
-        assert!(!interactive(&args(&["--no-window", "--game", "C:\\DiRT"]), false));
+        assert!(!interactive(
+            &args(&["--no-window", "--game", "C:\\DiRT"]),
+            false
+        ));
         // A double-clicked shortcut is a person.
         assert!(interactive(&[], false));
         assert!(interactive(&args(&["--settings"]), false));

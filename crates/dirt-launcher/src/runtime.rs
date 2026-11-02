@@ -153,9 +153,7 @@ mod tests {
 
     #[test]
     fn static_data_is_linked_and_the_rest_copied() {
-        let policy = Dirt {
-            dxvk_managed: true,
-        };
+        let policy = Dirt { dxvk_managed: true };
         for linked in [
             "tracks/locations/x.big",
             "cars/models/car.big",
@@ -198,7 +196,10 @@ mod tests {
         assert_eq!((report.brought, report.linked), (2, 1));
         rea_launcher::fsx::install(&runtime.join("tracks/stage.big"), b"changed").unwrap();
         rea_launcher::fsx::install(&runtime.join("DiRT.exe"), b"patched").unwrap();
-        assert_eq!(fs::read(game.join("tracks/stage.big")).unwrap(), b"original");
+        assert_eq!(
+            fs::read(game.join("tracks/stage.big")).unwrap(),
+            b"original"
+        );
         assert_eq!(fs::read(game.join("DiRT.exe")).unwrap(), b"exe");
         fs::remove_dir_all(game.parent().unwrap()).unwrap();
         fs::remove_dir_all(runtime.parent().unwrap()).unwrap();
@@ -218,7 +219,11 @@ mod tests {
         let save = runtime.join("savegame/Autosave0/QKSNQLYU");
         assert_eq!(fs::read(&save).unwrap(), b"old progress");
         fs::write(&save, b"new progress").unwrap();
-        fs::write(game.join("savegame/Autosave0/QKSNQLYU"), b"changed in the folder").unwrap();
+        fs::write(
+            game.join("savegame/Autosave0/QKSNQLYU"),
+            b"changed in the folder",
+        )
+        .unwrap();
         assert_eq!(sync(&game, &runtime, true).unwrap().brought, 0);
         assert_eq!(fs::read(&save).unwrap(), b"new progress");
         let policy = Dirt { dxvk_managed: true };
