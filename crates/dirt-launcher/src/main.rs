@@ -36,7 +36,7 @@ mod app {
     use dirt_launcher::display::Fallback;
     use dirt_launcher::plan::{self, Env};
     use dirt_launcher::runtime::DXVK_MARKER;
-    use dirt_launcher::{edition, hardware, runtime};
+    use dirt_launcher::{edition, hardware, instance, runtime};
     use rea_launcher::log::Log;
     use rea_launcher::{cfg, fsx, identify, paths};
     use rea_launcher_win32::report::{self, Mode};
@@ -72,6 +72,18 @@ mod app {
             Mode::Play {
                 interactive: interactive(),
             },
+        );
+    }
+
+    /// A message while preparing to play (another launcher is running).
+    fn play_note(text: &str) {
+        report::note(
+            TITLE,
+            text,
+            Mode::Play {
+                interactive: interactive(),
+            },
+            true,
         );
     }
 
@@ -162,6 +174,33 @@ mod app {
                 return Ok(0);
             }
             Err(message) => return Err(message),
+        };
+        // One launcher at a time, held until the game exits: a second
+        // start brings the window forward or refuses to play.
+        let _instance = if instance::needs_instance(&cli.switches) {
+            match rea_launcher_win32::instance::single(instance::NAME) {
+                Ok(guard) => Some(guard),
+                Err(running) => {
+                    let window =
+                        rea_launcher_win32::instance::Window::Title(instance::WINDOW_TITLE);
+                    let action = instance::is_action(&cli.switches);
+                    let second = instance::Second::of(
+                        action,
+                        || running.is_window_found(window),
+                        || running.bring_to_front(window),
+                    );
+                    log_line(&format!("another launcher is running: {second:?}"));
+                    match second.message() {
+                        // An action's outcome goes where its output goes.
+                        Some(message) if action => command(message),
+                        Some(message) => play_note(message),
+                        None => {}
+                    }
+                    return Ok(second.exit_code());
+                }
+            }
+        } else {
+            None
         };
         let settings_only = cli.has("--settings");
         let linux = cli.has("--linux");

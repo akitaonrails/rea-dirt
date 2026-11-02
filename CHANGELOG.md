@@ -30,6 +30,13 @@
   `launcher.cfg` is looked for next to `DiRTLauncher.exe` only, no longer
   in the folder above.
 
+### Added
+
+- One launcher at a time: a second start brings the open window forward,
+  or says the game is already running (exit code 5) instead of starting a
+  second game from the same private copy. `--setup` while the window is
+  open says so and exits 5. `--check` may still run next to a game.
+
 ### Fixed
 
 - A `launcher.cfg` saved in a Windows code page (Notepad's ANSI) is read
