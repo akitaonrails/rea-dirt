@@ -113,7 +113,11 @@ fn render(title: &str, settings: &Settings, env: &Env) -> String {
 
 #[test]
 fn help_and_template() {
-    snapshot("help", &config::usage());
+    // The version changes every release; the snapshot keeps a placeholder.
+    snapshot(
+        "help",
+        &config::usage().replace(env!("CARGO_PKG_VERSION"), "<version>"),
+    );
     snapshot("launcher-cfg-template", &config::template());
 }
 

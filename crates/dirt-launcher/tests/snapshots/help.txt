@@ -1,4 +1,4 @@
-DiRTLauncher 0.1.1
+DiRTLauncher <version>
 
 DiRTLauncher [options]
 
