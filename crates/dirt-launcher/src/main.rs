@@ -57,9 +57,11 @@ mod app {
         Log::new(home().join("launcher.log")).line(line);
     }
 
-    /// Whether a person may be watching (not `--no-window` from a script).
+    /// Whether a person may be watching (`dirt_launcher::audience`: under
+    /// Wine always, else not with `--no-window`).
     fn interactive() -> bool {
-        !std::env::args().skip(1).any(|arg| arg == "--no-window")
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        dirt_launcher::audience::interactive(&args, wine::is_wine())
     }
 
     /// An error the launcher stops on: a dialog when a person may be

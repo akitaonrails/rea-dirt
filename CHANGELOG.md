@@ -50,6 +50,10 @@
 
 ### Fixed
 
+- Under `dirt-play`, the AppImage and Proton, an error while starting to
+  play (no game folder, an unknown `DiRT.exe`, another launcher running)
+  only reached a log: their game run passes `--no-window`. Under Wine it is
+  a dialog again.
 - Under Wine and Proton the game is told to load the bundled DXVK
   `d3d9.dll` before Wine's own: `dirt-play` and the AppImage pass
   `WINEDLLOVERRIDES=d3d9=n,b`, and the launcher writes the same as

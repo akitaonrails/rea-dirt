@@ -1,3 +1,4 @@
+pub mod audience;
 pub mod config;
 pub mod display;
 pub mod edition;
