@@ -34,6 +34,12 @@ fn the_d3d9_override_round_trips_in_the_registry() {
         runtime: r"C:\DiRT".into(),
         ..Env::default()
     };
+    // The wine-test prefix outlives a run: start from no value (an earlier
+    // run ends with the player's value in place).
+    let key = format!(r"HKCU\Software\Wine\AppDefaults\{EXE}\DllOverrides");
+    let _ = Command::new("reg")
+        .args(["delete", &key, "/v", "d3d9", "/f"])
+        .output();
     let plan = plan::plan(&Default::default(), &env);
     let ours: Vec<(&str, DllMode)> = plan
         .app_dlls
@@ -49,7 +55,6 @@ fn the_d3d9_override_round_trips_in_the_registry() {
     assert_eq!(removed, ["d3d9"]);
     assert_eq!(query("d3d9"), None);
     // A value the player set stays, both ways.
-    let key = format!(r"HKCU\Software\Wine\AppDefaults\{EXE}\DllOverrides");
     Command::new("reg")
         .args(["add", &key, "/v", "d3d9", "/d", "builtin", "/f"])
         .status()
@@ -62,4 +67,7 @@ fn the_d3d9_override_round_trips_in_the_registry() {
             .is_empty()
     );
     assert_eq!(query("d3d9").as_deref(), Some("builtin"));
+    let _ = Command::new("reg")
+        .args(["delete", &key, "/v", "d3d9", "/f"])
+        .output();
 }
