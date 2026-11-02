@@ -66,3 +66,35 @@ claims.
   and a CI regression check were fixed. A later run created the 3840×2160
   fullscreen swapchain and exited with code 0. No game or launcher processes
   remained.
+
+## 2026-11-02: rea-launcher-sdk v0.3.3 migration, pending real-game checks
+
+Verified without the game running (host, `sdk/scripts/wine-test` in a
+private prefix, the owner's install read only):
+
+- The Large Address Aware patch set: the installed v1.22 (already LAA,
+  `e4b66bd3…`) unpatches to the plain v1.22 hash `e10268f8…` and patches
+  back to `e4b66bd3…` (`DIRT_GAME_DIR=… cargo test -- --ignored`), so the
+  site and its original bytes are right for both known builds.
+- The settings window under Wine on a private Xvfb display finds the
+  install through `Z:` ("Official v1.22 (already Large Address Aware)");
+  screenshots in `docs/images/`.
+- Wine-test prefix: `DiRT.exe`'s per-exe `d3d9` override is written as
+  `native,builtin`, taken back while it is ours, and a player's value is
+  kept.
+- A full package build (zip and AppImage) has the same layout as v0.1.x:
+  `usr/lib/dirt/linux/d3d9.dll`, `rea-play.sh` beside `dirt-play`.
+
+Not yet checked in the real game (each needs a run):
+
+- The DXVK `d3d9.dll` actually loaded through the per-exe override under
+  plain Proton (no `dirt-play`): `WINEDEBUG=+loaddll` should show the
+  copy's `d3d9.dll` as native.
+- `dirt-play` on `rea-play.sh`: a full race, then each way of quitting
+  (the game's Quit, Alt+F4, `dirt-play stop`, Ctrl+C, gamescope closed)
+  leaves no game, launcher, wineserver or gamescope behind.
+- A second launcher start while the game runs: the "already running"
+  message (exit 5), and no second game.
+- `aspect` values other than the screen's own and `vsync = off` change the
+  picture as described (seen so far only in the written XML).
+- Native Windows, the Steam Deck in Game Mode, Proton without the helper.

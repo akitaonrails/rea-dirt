@@ -32,6 +32,11 @@
 
 ### Added
 
+- The README follows the rea launcher layout (problems solved, every
+  option, where things live, uninstall, contributing), with screenshots of
+  each tab. New issue forms: bug report (with the `DiRT.exe` SHA-256) and
+  unknown version.
+
 - One launcher at a time: a second start brings the open window forward,
   or says the game is already running (exit code 5) instead of starting a
   second game from the same private copy. `--setup` while the window is
