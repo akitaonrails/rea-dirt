@@ -129,7 +129,9 @@ fn every_option_control_is_labelled_and_described() {
             "{key}"
         );
     };
-    row(&ui, "workers", Role::RadioGroup);
+    // The worker map is automatic: no control (an advanced file key).
+    assert!(ui.query_by_label(config::option("workers").label).is_none());
+    assert!(ui.query_by_label(CPU_NOTE).is_some());
     let folder = ui.get_by_role_and_label(Role::TextInput, "Game folder");
     assert!(testing::description(&folder).unwrap().contains("DiRT.exe"));
     for look in ["Modern", "Steam Deck", "Original 2007", "Custom"] {
@@ -178,8 +180,6 @@ fn picture_controls_change_the_form_and_make_the_look_custom() {
 #[test]
 fn play_tab_controls_change_the_form() {
     let (mut ui, _) = open(None, true, "play");
-    click(&mut ui, "4 (conservative)");
-    assert_eq!(ui.state().form.workers, Workers::Four);
     click(&mut ui, "Original 2007");
     assert_eq!(ui.state().form.look, Look::Original);
     assert_eq!(ui.state().form.picture.resolution, Some((1280, 720)));
@@ -204,7 +204,6 @@ fn the_scaler_says_why_it_is_off_without_the_linux_helper() {
 fn play_saves_every_value_to_launcher_cfg() {
     let (mut ui, dir) = open(None, true, "save");
     ready(&mut ui);
-    click(&mut ui, "12");
     ui.get_by_role_and_label(Role::Button, "Play").click();
     ui.run();
     assert_eq!(*ui.state().outcome.lock().unwrap(), Outcome::Play);
@@ -214,7 +213,7 @@ fn play_saves_every_value_to_launcher_cfg() {
     assert_eq!(settings.game, Some(PathBuf::from(r"D:\Jogos d'Ação\DiRT")));
     assert_eq!(settings.resolution, Some(Some((3840, 2160))));
     assert_eq!(settings.aspect, Some(Some(Aspect::Ratio169)));
-    assert_eq!(settings.workers, Some(Workers::Twelve));
+    assert_eq!(settings.workers, None);
     assert_eq!(settings.look, Some(Look::Modern));
     for line in [
         "fullscreen = on",

@@ -298,8 +298,9 @@ pub const OPTIONS: &[OptionSpec] = &[
         "workers",
         Kind::Choice(WORKERS),
         "Worker map",
-        "How many CPU threads the game's engine uses. Auto picks up to 12 from your CPU, which stops the crash while a race loads on modern processors.",
-    ),
+        "Advanced, launcher.cfg or flag only: how many CPU threads the game's engine uses. Auto picks up to 12 from your CPU, which stops the crash while a race loads on modern processors.",
+    )
+    .launcher_only(),
     OptionSpec::new(
         "scaler",
         Kind::Choice(SCALERS),

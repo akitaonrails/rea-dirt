@@ -29,7 +29,7 @@ This project contains no game files: you need your own copy of the game.
 
 | Play | Picture |
 | --- | --- |
-| ![The Play tab with the official v1.22 found, the four looks and the worker map](docs/images/launcher-play.jpg) | ![The Picture tab: resolution, aspect, what the game will run at, and the detail preset](docs/images/launcher-picture.jpg) |
+| ![The Play tab with the official v1.22 found and the four looks](docs/images/launcher-play.jpg) | ![The Picture tab: resolution, aspect, what the game will run at, and the detail preset](docs/images/launcher-picture.jpg) |
 
 | Display | Controls |
 | --- | --- |
@@ -118,7 +118,7 @@ choices are remembered.
 
 ## The settings window
 
-- **Play**: the game folder, the look, and the worker map for modern CPUs.
+- **Play**: the game folder and the look. The modern-CPU fix needs no setting.
 - **Picture**: resolution, aspect (with the size the game will run at)
   and DiRT's detail preset.
 - **Display**: fullscreen, vsync, and gamescope's scaler on Linux.
@@ -153,7 +153,7 @@ underscores) and on the command line (with hyphens); `DiRTLauncher.exe
 | --- | --- | --- | --- | --- |
 | `game` / `--game` | Play: Game folder | a folder | asked on the first run | The folder with `DiRT.exe`; only read. Remembered. |
 | `look` / `--look` | Play: Look | `modern`, `steam-deck`, `original`, `custom` | worked out from the values | Sets the picture options at once; options given after it win. |
-| `workers` / `--workers` | Play: Worker map | `auto`, `4`, `8`, `12` | `auto` | How many CPU threads the engine uses. Auto picks up to 12 from your CPU. |
+| `workers` / `--workers` | none (advanced) | `auto`, `4`, `8`, `12` | `auto` | How many CPU threads the engine uses. Auto picks up to 12 from your CPU; set it only if a race still crashes while loading. |
 | `resolution` / `--resolution` | Picture: Resolution | `WIDTHxHEIGHT`, `auto` | your screen (1920×1080 if unknown) | The game's screen size. |
 | `aspect` / `--aspect` | Picture: Aspect | `auto`, `4:3`, `5:4`, `16:9`, `16:10` | from the resolution | The picture's shape. |
 | `quality` / `--quality` | Picture: Quality | `medium`, `high`, `ultra` | `ultra` | DiRT's own detail preset. |
@@ -206,8 +206,9 @@ setting).
   updates up to v1.22. If your copy is v1.22 already, open the
   [unknown version](https://github.com/akitaonrails/rea-dirt/issues/new?template=unknown-edition.yml)
   form with the code the message shows.
-- **A race still crashes while loading:** keep **Worker map** on Auto, or
-  try **4 (conservative)**, and report your CPU with `launcher.log`.
+- **A race still crashes while loading:** add `workers = 4` to
+  `launcher.cfg` (or start with `--workers 4`), and report your CPU with
+  `launcher.log`.
 - **You changed resolution or detail in the game and it went back:** the
   launcher sets those on every start. Change them in the launcher.
 - **Graphics problems on Linux:** use the AppImage or `dirt-play`, which

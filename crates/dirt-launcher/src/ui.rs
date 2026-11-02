@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use dirt_launcher::config::{self, Aspect, Quality, Scaler, Workers};
+use dirt_launcher::config::{self, Aspect, Quality, Scaler};
 use dirt_launcher::edition;
 use dirt_launcher::form::{self, Form, Look, Picture};
 use rea_launcher::{cfg, fsx};
@@ -19,6 +19,10 @@ use rea_launcher_ui::window::Layout;
 use crate::palette::{BLUE, ERROR, GOLD, INK, MUTED};
 
 const PHOTO_W: f32 = 300.0;
+
+/// The Play tab's line on the fix that needs no setting.
+pub const CPU_NOTE: &str = "The crash while a race loads on modern CPUs is fixed for you: \
+     the game uses up to 12 of your processor's threads.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
@@ -327,7 +331,7 @@ impl Window {
                     badge: (look == form::recommended(screen)).then_some("Recommended"),
                     ..LookCard::default()
                 };
-                if widgets::look_card(ui, vec2(width, 116.0), &card).clicked() {
+                if widgets::look_card(ui, vec2(width, 128.0), &card).clicked() {
                     self.form.set_look(look);
                     self.refresh_resolutions();
                     if look == Look::Custom {
@@ -336,14 +340,9 @@ impl Window {
                 }
             }
         });
-        ui.add_space(14.0);
-
-        widgets::heading(ui, "Modern CPUs");
-        if let Some(text) = table_row(ui, "workers", self.form.workers.key(), None)
-            && let Some(workers) = Workers::parse(&text)
-        {
-            self.form.workers = workers;
-        }
+        ui.add_space(16.0);
+        // The modern-CPU fix has no setting: say once that it is applied.
+        widgets::note(ui, CPU_NOTE);
     }
 
     fn refresh_resolutions(&mut self) {

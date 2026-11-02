@@ -4,6 +4,10 @@
 
 ### Changed
 
+- The worker map has no control in the window any more: Auto (up to 12
+  threads from your CPU) is what fixes the race-load crash, and the Play
+  tab says it is applied. `workers` stays an advanced `launcher.cfg` key
+  and `--workers` flag; a value saved by v0.1.x is kept and still used.
 - The launcher is built on [rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk)
   v0.3.3: the private copy, `launcher.cfg`, the settings window, the Linux
   helper (`dirt-play` on `rea-play.sh`), packaging and CI are the shared

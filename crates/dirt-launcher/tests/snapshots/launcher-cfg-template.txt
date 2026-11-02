@@ -43,8 +43,9 @@
 # Values: on or off.
 #vsync =
 
-# How many CPU threads the game's engine uses. Auto picks up to 12 from your
-# CPU, which stops the crash while a race loads on modern processors.
+# Advanced, launcher.cfg or flag only: how many CPU threads the game's
+# engine uses. Auto picks up to 12 from your CPU, which stops the crash
+# while a race loads on modern processors.
 # Values: auto, 4, 8 or 12.
 #workers =
 

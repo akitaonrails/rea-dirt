@@ -5,7 +5,7 @@ use rea_launcher::cfg;
 pub use rea_launcher::display::STEAM_DECK_SCREEN;
 
 pub use crate::config::Look;
-use crate::config::{self, Aspect, Quality, Scaler, Settings, Workers};
+use crate::config::{self, Aspect, Quality, Scaler, Settings};
 
 /// The picture values a look sets; `None` for the resolution or the aspect
 /// is Auto.
@@ -71,7 +71,6 @@ pub struct Form {
     /// values match another (Modern on a Deck is the Steam Deck picture),
     /// and Custom stays selected while the player edits.
     pub look: Look,
-    pub workers: Workers,
     pub scaler: Scaler,
 }
 
@@ -86,7 +85,6 @@ impl Form {
                 .unwrap_or_default(),
             look: Form::look_of(&picture, screen),
             picture,
-            workers: settings.effective_workers(),
             scaler: settings.effective_scaler(),
         }
     }
@@ -163,7 +161,8 @@ impl Form {
     }
 
     /// The settings file with every window value written (Auto saved as
-    /// what it stands for on this screen, as earlier releases did).
+    /// what it stands for on this screen, as earlier releases did). The
+    /// worker map has no control: a `workers` line stays as it was.
     pub fn save(&self, text: &str, screen: Option<(u32, u32)>) -> String {
         let picture = self.picture.resolved(screen);
         let (width, height) = picture.resolution.expect("resolved");
@@ -178,7 +177,6 @@ impl Form {
             ("quality", picture.quality.key().to_string()),
             ("fullscreen", cfg::on_off(picture.fullscreen).to_string()),
             ("vsync", cfg::on_off(picture.vsync).to_string()),
-            ("workers", self.workers.key().to_string()),
             ("scaler", self.scaler.key().to_string()),
         ];
         values.iter().fold(text.to_string(), |out, (key, value)| {
@@ -225,6 +223,7 @@ pub fn resolutions(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Workers;
 
     const SCREEN: Option<(u32, u32)> = Some((3840, 2160));
     const DECK: Option<(u32, u32)> = Some(STEAM_DECK_SCREEN);
@@ -242,7 +241,7 @@ mod tests {
         assert_eq!(picture.aspect, Some(Aspect::Ratio169));
         assert_eq!(form.picture.quality, Quality::Ultra);
         assert!(form.picture.fullscreen && form.picture.vsync);
-        assert_eq!((form.workers, form.scaler), (Workers::Auto, Scaler::Linear));
+        assert_eq!(form.scaler, Scaler::Linear);
     }
 
     #[test]
@@ -258,12 +257,24 @@ mod tests {
             "quality = ultra",
             "fullscreen = on",
             "vsync = on",
-            "workers = auto",
             "scaler = linear",
             "look = modern",
         ] {
             assert!(text.contains(line), "{line}");
         }
+        // The worker map is the launcher's: the window never writes it.
+        assert_eq!(Settings::parse_file(&text).0.workers, None);
+    }
+
+    /// v0.1.x's window saved `workers = …`. The window no longer shows it,
+    /// and saving keeps the line as it was: the advanced key still works.
+    #[test]
+    fn an_earlier_worker_choice_is_kept_when_saving() {
+        let old = "game = D:\\DiRT\nworkers = 8\nquality = high\n";
+        let form = Form::from_file(Some(old), SCREEN);
+        let saved = form.save(old, SCREEN);
+        assert!(saved.contains("\nworkers = 8\n"), "{saved}");
+        assert_eq!(Settings::parse_file(&saved).0.workers, Some(Workers::Eight));
     }
 
     #[test]
@@ -291,17 +302,13 @@ mod tests {
             },
             SCREEN,
         );
-        form.workers = Workers::Four;
         form.scaler = Scaler::Fsr;
         let (settings, warnings) = Settings::parse_file(&form.save(&template(), SCREEN));
         assert!(warnings.is_empty(), "{warnings:?}");
         let loaded = Form::new(&settings, SCREEN);
         assert_eq!(loaded.game, form.game);
         assert_eq!(loaded.picture, form.picture.resolved(SCREEN));
-        assert_eq!(
-            (loaded.workers, loaded.scaler),
-            (Workers::Four, Scaler::Fsr)
-        );
+        assert_eq!(loaded.scaler, Scaler::Fsr);
         assert_eq!((loaded.look, form.look), (Look::Custom, Look::Custom));
     }
 
