@@ -39,6 +39,13 @@
 
 ### Fixed
 
+- Under Wine and Proton the game is told to load the bundled DXVK
+  `d3d9.dll` before Wine's own: `dirt-play` and the AppImage pass
+  `WINEDLLOVERRIDES=d3d9=n,b`, and the launcher writes the same as
+  `DiRT.exe`'s per-program DLL override in the prefix (only where none is
+  set; a value you set is kept). Proton running `DiRTLauncher.exe` without
+  the helper uses Proton's DXVK, and the launcher's own override is taken
+  back.
 - A `launcher.cfg` saved in a Windows code page (Notepad's ANSI) is read
   instead of being replaced by the template.
 - The private copy's overlap check failed under Windows path rules.

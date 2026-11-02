@@ -47,6 +47,7 @@ for layout in repo pkg; do
   contains "[$layout] the window opens through the helper" "$(cat "$T/settings" 2>/dev/null)" "DiRTLauncher.exe --settings --linux"
   contains "[$layout] the game runs in gamescope" "$(cat "$T/ran" 2>/dev/null)" "gamescope -W 1920 -H 1080"
   contains "[$layout] without the window" "$(cat "$T/ran" 2>/dev/null)" "DiRTLauncher.exe --no-window"
+  contains "[$layout] DXVK's d3d9 first" "$(cat "$T/ran" 2>/dev/null)" "WINEDLLOVERRIDES=d3d9=n,b"
   rm -f "$T/ran"
   echo 3 > "$T/rc"
   sh "$play" > "$T/out" 2>&1; rc=$?

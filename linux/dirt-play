@@ -10,6 +10,8 @@
 #  - a private Wine prefix at ~/.local/share/dirt-launcher/prefix
 #  - gamescope at the launcher.cfg resolution with its scaler, skipped when
 #    fullscreen = off (the game then sizes its own window)
+#  - DXVK's d3d9.dll loaded before Wine's own (the launcher also writes it
+#    as DiRT.exe's per-exe DLL override, for plain Proton)
 #  - the session lasts until DiRT.exe exits (the launcher can return first
 #    when it starts the game in an isolated Wine desktop)
 #
@@ -47,6 +49,7 @@ REA_PLAY_ARGS="--no-window --linux"
 REA_SDL_ENV=SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1
 REA_SDL_SETTINGS=0
 REA_GAME_PROCS=DiRT.exe
+REA_DLL_OVERRIDES='d3d9=n,b'     # the DXVK d3d9.dll the launcher puts in the copy
 REA_WINDOWED_KEY=fullscreen       # fullscreen = off: no gamescope of our own
 REA_WINDOWED_VALUES="off false no 0"
 # Keys the helper reads itself: a play run's --scaler, --resolution or

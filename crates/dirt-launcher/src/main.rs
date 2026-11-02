@@ -159,6 +159,41 @@ mod app {
         Ok(())
     }
 
+    /// Writes the plan's per-exe DLL overrides under Wine
+    /// (`HKCU\Software\Wine\AppDefaults\DiRT.exe\DllOverrides`) and takes
+    /// back the ones no longer wanted; failures are logged, not fatal.
+    fn apply_app_dll_overrides(plan: &plan::Plan) {
+        use rea_launcher_win32::wine::{self as winereg, DllMode};
+        fn modes(dlls: &[String]) -> Vec<(&str, DllMode)> {
+            dlls.iter()
+                .map(|dll| (dll.as_str(), DllMode::NativeThenBuiltin))
+                .collect()
+        }
+        let (on, off) = (modes(&plan.app_dlls), modes(&plan.app_dlls_off));
+        match winereg::remove_app_dll_overrides(edition::EXE, &off) {
+            Ok(removed) if !removed.is_empty() => log_line(&format!(
+                "wine: per-exe DLL overrides removed for {}: {}",
+                edition::EXE,
+                removed.join(",")
+            )),
+            Ok(_) => {}
+            Err(error) => log_line(&format!("warning: {error}")),
+        }
+        if on.is_empty() {
+            return;
+        }
+        match winereg::app_dll_overrides(edition::EXE, &on) {
+            Ok(applied) => log_line(&format!(
+                "wine: per-exe DLL overrides for {} (native,builtin): written {:?}, already ours {:?}, the player's kept {:?}",
+                edition::EXE,
+                applied.written,
+                applied.ours,
+                applied.player
+            )),
+            Err(error) => log_line(&format!("warning: {error}")),
+        }
+    }
+
     const WINDOW_CLOSED: u32 = 3;
     const WINDOW_UNAVAILABLE: u32 = 4;
 
@@ -384,6 +419,16 @@ mod app {
 
         let mut command = Command::new(&plan.command[0]);
         command.args(&plan.command[1..]);
+        if let Some(overrides) = &plan.dll_overrides {
+            log_line(&format!("wine: DLL overrides {overrides}"));
+            command.env("WINEDLLOVERRIDES", overrides);
+        }
+        // Wine ignores WINEDLLOVERRIDES in a child's environment block
+        // (SDK v0.3.3): our DXVK d3d9 goes into the game's per-exe registry
+        // overrides; values the player set are kept.
+        if wine {
+            apply_app_dll_overrides(&plan);
+        }
         let status = command
             .current_dir(&runtime_dir)
             .status()
