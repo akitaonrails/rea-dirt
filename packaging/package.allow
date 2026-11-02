@@ -1,0 +1,15 @@
+# Everything the zip folder (dist/DiRTLauncher-<version>/) may hold; anything
+# else fails sdk/packaging/smoke-package.sh in CI. Never game files.
+# Flags: x (executable), empty (may be empty), optional (may be missing).
+DiRTLauncher.exe
+README.md
+THIRD_PARTY.md
+CHANGELOG.md
+LICENSE-MIT
+LICENSE-APACHE
+linux/dirt-play x
+linux/rea-play.sh
+linux/README.md
+licenses/Barlow-OFL.txt
+linux/d3d9.dll optional
+linux/dxvk-LICENSE optional

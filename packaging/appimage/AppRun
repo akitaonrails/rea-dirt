@@ -1,8 +1,0 @@
-#!/bin/sh
-HERE=$(dirname "$(readlink -f "$0")")
-export PATH="$HERE/usr/lib/wine/bin:$PATH"
-export DIRT_LAUNCHER="$HERE/usr/lib/dirt/DiRTLauncher.exe"
-export DIRT_WAIT=1
-export WINEDLLOVERRIDES="mscoree,mshtml=${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
-export WINEDEBUG="${WINEDEBUG:--all}"
-exec "$HERE/usr/lib/dirt/dirt-play" "$@"
