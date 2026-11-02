@@ -2,6 +2,8 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use rea_launcher::fsx;
+
 use quick_xml::Reader;
 use quick_xml::Writer;
 use quick_xml::events::{BytesStart, Event};
@@ -420,17 +422,12 @@ pub fn configure_xml(
     String::from_utf8(writer.into_inner()).map_err(|error| error.to_string())
 }
 
-fn write_if_changed(path: &Path, contents: &str) -> Result<bool, String> {
-    if fs::read_to_string(path).is_ok_and(|current| current == contents) {
-        return Ok(false);
-    }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
-    }
-    fs::write(path, contents)
-        .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
-    Ok(true)
+/// Writes `contents` as a whole-file swap (`rea_launcher::fsx::install`:
+/// never through a hard link, nothing written when the bytes are already
+/// there).
+fn install_xml(path: &Path, contents: &str) -> Result<(), String> {
+    fsx::install(path, contents)
+        .map_err(|error| format!("cannot write {}: {error}", path.display()))
 }
 
 pub fn configure_runtime(
@@ -442,19 +439,19 @@ pub fn configure_runtime(
     let selection = select_workers(workers, logical_cpus);
     let system = runtime.join("system");
     for cores in [8, 12] {
-        write_if_changed(
+        install_xml(
             &system.join(format!("workerMap{cores}Core.xml")),
             &worker_map_xml(cores)?,
         )?;
     }
-    write_if_changed(
+    install_xml(
         &system.join("hardware_settings_restrictions.xml"),
         &restrictions_xml(workers, logical_cpus),
     )?;
     let default = fs::read_to_string(system.join("hardware_settings_config.xml"))
         .unwrap_or_else(|_| DEFAULT_CONFIG.into());
     let configured = configure_xml(&default, picture, selection)?;
-    write_if_changed(&system.join("hardware_settings_config.xml"), &configured)?;
+    install_xml(&system.join("hardware_settings_config.xml"), &configured)?;
     configure_user(
         &runtime
             .join("hardwaresettings")
@@ -483,7 +480,7 @@ pub fn configure_user(
 ) -> Result<(), String> {
     let current = fs::read_to_string(path).unwrap_or_else(|_| DEFAULT_CONFIG.into());
     let configured = configure_xml(&current, picture, selection)?;
-    write_if_changed(path, &configured)?;
+    install_xml(path, &configured)?;
     Ok(())
 }
 

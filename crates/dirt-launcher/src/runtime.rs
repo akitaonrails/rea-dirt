@@ -1,177 +1,70 @@
-use std::collections::BTreeMap;
-use std::fs;
-use std::io;
-use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+//! The private runtime copy of the game folder: DiRT's [`Policy`] on the
+//! SDK's runtime engine (`rea_launcher::runtime`), which lists, plans,
+//! copies as whole-file swaps and keeps the manifest.
 
+use std::io;
+use std::path::Path;
+
+use rea_launcher::runtime::{self, Policy, Stamp, SyncReport};
+
+/// The manifest of the last copy (`size\tmtime\trel` lines: the SDK's
+/// format, which earlier releases already wrote).
 pub const MANIFEST: &str = ".dirt-manifest";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Stamp {
-    pub size: u64,
-    pub mtime: u64,
-}
+/// The marker `DiRTLauncher` leaves next to the DXVK `d3d9.dll` it installs.
+pub const DXVK_MARKER: &str = ".dirt-dxvk";
 
-pub type Listing = BTreeMap<String, Stamp>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Plan {
-    pub copy: Vec<String>,
-    pub manifest: Listing,
-}
-
-pub fn plan(source: &Listing, runtime_has: &dyn Fn(&str) -> bool, manifest: &Listing) -> Plan {
-    let mut copy = Vec::new();
-    let mut next = Listing::new();
-    for (rel, stamp) in source {
-        let present = runtime_has(rel);
-        let changed = manifest.get(rel) != Some(stamp);
-        if !present || changed {
-            copy.push(rel.clone());
-        }
-        next.insert(rel.clone(), *stamp);
-    }
-    Plan {
-        copy,
-        manifest: next,
-    }
-}
-
-pub fn parse_manifest(text: &str) -> Listing {
-    text.lines()
-        .filter_map(|line| {
-            let mut parts = line.splitn(3, '\t');
-            let size = parts.next()?.parse().ok()?;
-            let mtime = parts.next()?.parse().ok()?;
-            Some((parts.next()?.to_owned(), Stamp { size, mtime }))
-        })
-        .collect()
-}
-
-pub fn format_manifest(listing: &Listing) -> String {
-    listing
+/// Files the launcher owns in the runtime copy and a sync must never
+/// overwrite: its bookkeeping, always; `d3d9.dll` only while the launcher
+/// manages DXVK there (`--linux`, or its marker is present). On native
+/// Windows a player's own `d3d9.dll` is copied like any other game file.
+pub fn is_owned(rel: &str, dxvk_managed: bool) -> bool {
+    [MANIFEST, DXVK_MARKER]
         .iter()
-        .map(|(rel, s)| format!("{}\t{}\t{}\n", s.size, s.mtime, rel))
-        .collect()
+        .any(|name| rel.eq_ignore_ascii_case(name))
+        || (dxvk_managed && rel.eq_ignore_ascii_case("d3d9.dll"))
 }
 
-fn mtime_secs(meta: &fs::Metadata) -> u64 {
-    meta.modified()
-        .ok()
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map_or(0, |d| d.as_secs())
+/// What DiRT's runtime copy needs: every game file is copied (nothing is
+/// hard-linked, as in every earlier release), the launcher's own files are
+/// never copied over. The generated worker maps and hardware XML are
+/// rewritten after each sync.
+pub struct Dirt {
+    pub dxvk_managed: bool,
 }
 
-pub fn list(root: &Path) -> io::Result<Listing> {
-    fn walk(root: &Path, dir: &Path, out: &mut Listing) -> io::Result<()> {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            let meta = entry.metadata()?;
-            if meta.is_dir() {
-                walk(root, &path, out)?;
-            } else if meta.is_file() {
-                let rel = path
-                    .strip_prefix(root)
-                    .expect("walk stays below root")
-                    .components()
-                    .map(|c| c.as_os_str().to_string_lossy())
-                    .collect::<Vec<_>>()
-                    .join("/");
-                out.insert(
-                    rel,
-                    Stamp {
-                        size: meta.len(),
-                        mtime: mtime_secs(&meta),
-                    },
-                );
-            }
-        }
-        Ok(())
+impl Policy for Dirt {
+    fn owned(&self, rel: &str, _source: Stamp) -> bool {
+        is_owned(rel, self.dxvk_managed)
     }
-    let mut out = Listing::new();
-    walk(root, root, &mut out)?;
-    Ok(out)
 }
 
-pub fn native(root: &Path, rel: &str) -> PathBuf {
-    rel.split('/')
-        .fold(root.to_path_buf(), |p, part| p.join(part))
-}
-
-pub fn check_separate(game: &Path, runtime: &Path) -> Result<(), String> {
-    let game = fs::canonicalize(game).map_err(|e| format!("game folder {game:?}: {e}"))?;
-    let runtime = fs::canonicalize(runtime).unwrap_or_else(|_| runtime.to_path_buf());
-    if runtime.starts_with(&game) || game.starts_with(&runtime) {
-        return Err("the runtime folder must be outside the game folder".into());
-    }
-    Ok(())
-}
-
-fn make_writable(path: &Path) -> io::Result<()> {
-    let mut permissions = fs::metadata(path)?.permissions();
-    #[allow(clippy::permissions_set_readonly_false)]
-    permissions.set_readonly(false);
-    fs::set_permissions(path, permissions)
-}
-
-pub fn sync(game: &Path, runtime: &Path) -> io::Result<usize> {
-    let source = list(game)?;
-    fs::create_dir_all(runtime)?;
-    let manifest_path = runtime.join(MANIFEST);
-    let manifest = fs::read_to_string(&manifest_path)
-        .map(|text| parse_manifest(&text))
-        .unwrap_or_default();
-    let plan = plan(&source, &|rel| native(runtime, rel).is_file(), &manifest);
-    for rel in &plan.copy {
-        let from = native(game, rel);
-        let to = native(runtime, rel);
-        if let Some(dir) = to.parent() {
-            fs::create_dir_all(dir)?;
-        }
-        if to.exists() {
-            make_writable(&to)?;
-        }
-        fs::copy(&from, &to)?;
-        make_writable(&to)?;
-        let stamp = source[rel];
-        fs::OpenOptions::new()
-            .write(true)
-            .open(&to)?
-            .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(stamp.mtime))?;
-    }
-    fs::write(&manifest_path, format_manifest(&plan.manifest))?;
-    Ok(plan.copy.len())
+/// Brings the runtime copy up to date with the game folder. `linux` means
+/// the launcher installs its DXVK `d3d9.dll` in this run.
+pub fn sync(game: &Path, runtime: &Path, linux: bool) -> io::Result<SyncReport> {
+    let dxvk_managed = linux || runtime.join(DXVK_MARKER).is_file();
+    runtime::sync(game, runtime, &Dirt { dxvk_managed }, MANIFEST)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn stamp(size: u64, mtime: u64) -> Stamp {
-        Stamp { size, mtime }
-    }
+    use rea_launcher::runtime::{Listing, plan};
+    use std::collections::BTreeMap;
+    use std::fs;
+    use std::path::PathBuf;
 
     fn temp(name: &str) -> PathBuf {
-        let path =
-            std::env::temp_dir().join(format!("dirt-launcher-test-{}-{name}", std::process::id()));
+        // A hostile path: spaces, an apostrophe, non-ASCII letters.
+        let path = std::env::temp_dir()
+            .join(format!("dirt-launcher-test-{}-{name}", std::process::id()))
+            .join("Jogos d'Ação");
         let _ = fs::remove_dir_all(&path);
         path
     }
 
-    #[test]
-    fn unchanged_files_are_not_recopied() {
-        let source = BTreeMap::from([("DiRT.exe".into(), stamp(10, 20))]);
-        assert!(plan(&source, &|_| true, &source).copy.is_empty());
-        assert_eq!(plan(&source, &|_| false, &source).copy, ["DiRT.exe"]);
-        let changed = BTreeMap::from([("DiRT.exe".into(), stamp(11, 20))]);
-        assert_eq!(plan(&changed, &|_| true, &source).copy, ["DiRT.exe"]);
-    }
-
-    #[test]
-    fn manifest_round_trips_with_spaces() {
-        let listing = BTreeMap::from([("folder/a file.xml".into(), stamp(10, 20))]);
-        assert_eq!(parse_manifest(&format_manifest(&listing)), listing);
+    fn stamp(size: u64, mtime: u64) -> Stamp {
+        Stamp { size, mtime }
     }
 
     #[test]
@@ -181,25 +74,96 @@ mod tests {
         fs::create_dir_all(game.join("system")).unwrap();
         fs::write(game.join("DiRT.exe"), b"one").unwrap();
         fs::write(game.join("system/map.xml"), b"old").unwrap();
-        assert_eq!(sync(&game, &runtime).unwrap(), 2);
+        assert_eq!(sync(&game, &runtime, false).unwrap().brought, 2);
         fs::write(runtime.join("system/workerMap12Core.xml"), b"ours").unwrap();
-        assert_eq!(sync(&game, &runtime).unwrap(), 0);
+        assert_eq!(sync(&game, &runtime, false).unwrap().brought, 0);
         fs::write(game.join("system/map.xml"), b"new!").unwrap();
-        assert_eq!(sync(&game, &runtime).unwrap(), 1);
+        assert_eq!(sync(&game, &runtime, false).unwrap().brought, 1);
+        assert_eq!(fs::read(runtime.join("system/map.xml")).unwrap(), b"new!");
         assert_eq!(
             fs::read(runtime.join("system/workerMap12Core.xml")).unwrap(),
             b"ours"
         );
-        fs::remove_dir_all(game).unwrap();
-        fs::remove_dir_all(runtime).unwrap();
+        assert_eq!(sync(&game, &runtime, false).unwrap().linked, 0);
+        fs::remove_dir_all(game.parent().unwrap()).unwrap();
+        fs::remove_dir_all(runtime.parent().unwrap()).unwrap();
+    }
+
+    /// v0.1.x wrote `.dirt-manifest` as `size\tmtime\trel`: a runtime it
+    /// made is not copied again.
+    #[test]
+    fn a_manifest_written_by_an_earlier_release_keeps_working() {
+        let game = temp("old-manifest-game");
+        let runtime = temp("old-manifest-runtime");
+        fs::create_dir_all(game.join("system")).unwrap();
+        fs::create_dir_all(runtime.join("system")).unwrap();
+        fs::write(game.join("system/a file.xml"), b"data").unwrap();
+        fs::write(runtime.join("system/a file.xml"), b"data").unwrap();
+        let source = runtime::list(&game).unwrap()["system/a file.xml"];
+        fs::write(
+            runtime.join(MANIFEST),
+            format!("{}\t{}\tsystem/a file.xml\n", source.size, source.mtime),
+        )
+        .unwrap();
+        assert_eq!(sync(&game, &runtime, false).unwrap().brought, 0);
+        fs::remove_dir_all(game.parent().unwrap()).unwrap();
+        fs::remove_dir_all(runtime.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn launcher_owned_files_are_never_synced() {
+        let source: Listing = BTreeMap::from([
+            ("d3d9.dll".into(), stamp(1, 1)),
+            ("DiRT.exe".into(), stamp(1, 1)),
+        ]);
+        let managed = plan(
+            &source,
+            &|_| false,
+            &Listing::new(),
+            &Dirt { dxvk_managed: true },
+        );
+        assert_eq!(managed.copy, ["DiRT.exe"]);
+        let windows = plan(
+            &source,
+            &|_| false,
+            &Listing::new(),
+            &Dirt {
+                dxvk_managed: false,
+            },
+        );
+        assert_eq!(windows.copy, ["DiRT.exe", "d3d9.dll"]);
+        for managed in [false, true] {
+            assert!(is_owned(MANIFEST, managed) && is_owned(DXVK_MARKER, managed));
+        }
+        assert!(!is_owned("system/d3d9.dll", true));
+    }
+
+    #[test]
+    fn a_sync_keeps_the_installed_dxvk() {
+        let game = temp("owned-game");
+        let runtime = temp("owned-runtime");
+        fs::create_dir_all(&game).unwrap();
+        fs::write(game.join("d3d9.dll"), b"player's wrapper").unwrap();
+        fs::write(game.join("DiRT.exe"), b"exe").unwrap();
+        assert_eq!(sync(&game, &runtime, true).unwrap().brought, 1);
+        fs::write(runtime.join("d3d9.dll"), b"dxvk").unwrap();
+        fs::write(runtime.join(DXVK_MARKER), b"").unwrap();
+        fs::write(game.join("d3d9.dll"), b"changed wrapper").unwrap();
+        // The marker alone keeps it ours, even without --linux.
+        assert_eq!(sync(&game, &runtime, false).unwrap().brought, 0);
+        assert_eq!(fs::read(runtime.join("d3d9.dll")).unwrap(), b"dxvk");
+        fs::remove_dir_all(game.parent().unwrap()).unwrap();
+        fs::remove_dir_all(runtime.parent().unwrap()).unwrap();
     }
 
     #[test]
     fn overlapping_folders_are_refused() {
+        // The SDK check the launcher calls before every sync (the local
+        // copy failed under Windows semantics: sdk/scripts/wine-test).
         let game = temp("overlap");
         fs::create_dir_all(&game).unwrap();
-        assert!(check_separate(&game, &game.join("runtime")).is_err());
-        assert!(check_separate(&game, &temp("elsewhere")).is_ok());
-        fs::remove_dir_all(game).unwrap();
+        assert!(rea_launcher::paths::check_separate(&game, &game.join("runtime")).is_err());
+        assert!(rea_launcher::paths::check_separate(&game, &temp("elsewhere")).is_ok());
+        fs::remove_dir_all(game.parent().unwrap()).unwrap();
     }
 }

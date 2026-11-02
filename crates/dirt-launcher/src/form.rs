@@ -48,7 +48,7 @@ impl Picture {
     }
 }
 
-pub const STEAM_DECK_SCREEN: (u32, u32) = (1280, 800);
+pub use rea_launcher::display::STEAM_DECK_SCREEN;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Look {
@@ -140,20 +140,6 @@ impl Form {
     }
 }
 
-pub const WINDOW: (f32, f32) = (880.0, 640.0);
-
-pub fn window_zoom(screen: Option<(u32, u32)>, native: f32) -> f32 {
-    let native = if native > 0.0 { native } else { 1.0 };
-    let Some((width, height)) = screen else {
-        return 1.0;
-    };
-    let (width, height) = (width as f32, height as f32);
-    let fit = 0.9 * (width / WINDOW.0).min(height / WINDOW.1);
-    let target = (width.min(height) / 1440.0).max(1.0).min(fit);
-    let zoom = (target / native).max(1.0);
-    (zoom * 20.0).round() / 20.0
-}
-
 pub fn resolutions(screen: Option<(u32, u32)>) -> Vec<(Option<(u32, u32)>, String)> {
     let common = [(1920, 1080), (2560, 1440), (3840, 2160)];
     let mut out = vec![(None, "Auto".to_string())];
@@ -191,35 +177,6 @@ pub const SCALERS: [(Scaler, &str, &str); 4] = [
     (Scaler::Fsr, "FSR", "AMD FSR upscaling and sharpening."),
     (Scaler::Linear, "Smooth", "Plain linear scaling (default)."),
 ];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PadAction {
-    Play,
-    Next,
-    Previous,
-    Press,
-    NextTab,
-    PreviousTab,
-}
-
-pub fn pad_actions(previous: u16, current: u16) -> Vec<PadAction> {
-    let pressed = current & !previous;
-    let mut actions = Vec::new();
-    for (mask, action) in [
-        (0x1000, PadAction::Play),
-        (0x0010, PadAction::PreviousTab),
-        (0x0020, PadAction::NextTab),
-        (0x0001, PadAction::Next),
-        (0x0002, PadAction::Previous),
-        (0x0004, PadAction::Press),
-        (0x0008, PadAction::Press),
-    ] {
-        if pressed & mask != 0 {
-            actions.push(action);
-        }
-    }
-    actions
-}
 
 #[cfg(test)]
 mod tests {
@@ -261,11 +218,5 @@ mod tests {
         let mut form = Form::first_run(SCREEN);
         form.picture.quality = Quality::High;
         assert_eq!(Form::look_of(&form.picture, SCREEN), Look::Custom);
-    }
-
-    #[test]
-    fn pad_buttons_are_edge_triggered() {
-        assert_eq!(pad_actions(0, 0x1000), [PadAction::Play]);
-        assert!(pad_actions(0x1000, 0x1000).is_empty());
     }
 }

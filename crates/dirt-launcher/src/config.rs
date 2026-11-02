@@ -212,80 +212,34 @@ pub const USAGE: &str = concat!(
     "Options override launcher.cfg for one run; only --game is remembered."
 );
 
-fn parse_bool(value: &str) -> Option<bool> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "true" | "yes" | "on" | "1" => Some(true),
-        "false" | "no" | "off" | "0" => Some(false),
-        _ => None,
-    }
-}
+use rea_launcher::cfg::{self, Rejected};
 
 fn parse_resolution(value: &str) -> Option<(u32, u32)> {
-    let value = value.trim().to_ascii_lowercase();
-    let (width, height) = value.split_once('x')?;
-    let width = width.trim().parse().ok()?;
-    let height = height.trim().parse().ok()?;
-    ((640..=7680).contains(&width) && (480..=4320).contains(&height)).then_some((width, height))
-}
-
-fn entry(line: &str) -> Option<(&str, &str)> {
-    let line = line.trim();
-    if line.starts_with('#') {
-        return None;
-    }
-    let (key, value) = line.split_once('=')?;
-    let value = value.trim();
-    (!value.is_empty()).then_some((key.trim(), value))
+    cfg::parse_size(value, (640, 480), (7680, 4320))
 }
 
 impl Settings {
+    /// Takes one `launcher.cfg` value or flag value.
+    fn apply(&mut self, key: &str, value: &str) -> Result<(), Rejected> {
+        let bad = || Rejected::needs("a valid value");
+        match key {
+            "game" => self.game = Some(value.into()),
+            "runtime" => self.runtime = Some(value.into()),
+            "resolution" => self.resolution = Some(parse_resolution(value).ok_or_else(bad)?),
+            "aspect" => self.aspect = Some(Aspect::parse(value).ok_or_else(bad)?),
+            "quality" => self.quality = Some(Quality::parse(value).ok_or_else(bad)?),
+            "fullscreen" => self.fullscreen = Some(cfg::parse_bool(value).ok_or_else(bad)?),
+            "vsync" => self.vsync = Some(cfg::parse_bool(value).ok_or_else(bad)?),
+            "workers" => self.workers = Some(Workers::parse(value).ok_or_else(bad)?),
+            "scaler" => self.scaler = Some(Scaler::parse(value).ok_or_else(bad)?),
+            _ => return Err(Rejected::Unknown),
+        }
+        Ok(())
+    }
+
     pub fn parse_file(text: &str) -> (Settings, Vec<String>) {
         let mut settings = Settings::default();
-        let mut warnings = Vec::new();
-        for (index, line) in text.lines().enumerate() {
-            let Some((key, value)) = entry(line) else {
-                continue;
-            };
-            let mut bad = || {
-                warnings.push(format!(
-                    "{FILE_NAME} line {}: invalid {key} {value:?}",
-                    index + 1
-                ))
-            };
-            match key {
-                "game" => settings.game = Some(value.into()),
-                "runtime" => settings.runtime = Some(value.into()),
-                "resolution" => match parse_resolution(value) {
-                    Some(value) => settings.resolution = Some(value),
-                    None => bad(),
-                },
-                "aspect" => match Aspect::parse(value) {
-                    Some(value) => settings.aspect = Some(value),
-                    None => bad(),
-                },
-                "quality" => match Quality::parse(value) {
-                    Some(value) => settings.quality = Some(value),
-                    None => bad(),
-                },
-                "fullscreen" => match parse_bool(value) {
-                    Some(value) => settings.fullscreen = Some(value),
-                    None => bad(),
-                },
-                "vsync" => match parse_bool(value) {
-                    Some(value) => settings.vsync = Some(value),
-                    None => bad(),
-                },
-                "workers" => match Workers::parse(value) {
-                    Some(value) => settings.workers = Some(value),
-                    None => bad(),
-                },
-                "scaler" => match Scaler::parse(value) {
-                    Some(value) => settings.scaler = Some(value),
-                    None => bad(),
-                },
-                _ => {}
-            }
-        }
+        let warnings = cfg::parse(text, FILE_NAME, |key, value| settings.apply(key, value));
         (settings, warnings)
     }
 
@@ -324,14 +278,15 @@ impl Settings {
                 "--fullscreen" => {
                     let text = value("--fullscreen")?;
                     settings.fullscreen = Some(
-                        parse_bool(&text)
+                        cfg::parse_bool(&text)
                             .ok_or_else(|| format!("invalid fullscreen value {text}"))?,
                     );
                 }
                 "--vsync" => {
                     let text = value("--vsync")?;
                     settings.vsync = Some(
-                        parse_bool(&text).ok_or_else(|| format!("invalid vsync value {text}"))?,
+                        cfg::parse_bool(&text)
+                            .ok_or_else(|| format!("invalid vsync value {text}"))?,
                     );
                 }
                 "--workers" => {
@@ -382,40 +337,13 @@ impl Settings {
     }
 }
 
-pub fn landscape((a, b): (u32, u32)) -> Option<(u32, u32)> {
-    let (width, height) = (a.max(b) & !1, a.min(b) & !1);
-    (width >= 640 && height >= 480 && width <= 7680 && height <= 4320).then_some((width, height))
+pub fn landscape(screen: (u32, u32)) -> Option<(u32, u32)> {
+    // 640x480 itself is offered, as in every earlier release.
+    rea_launcher::display::landscape_from(screen, (640, 480))
 }
 
 pub fn set_key(text: &str, key: &str, value: &str) -> String {
-    let mut found = false;
-    let mut lines: Vec<String> = text
-        .lines()
-        .map(|line| {
-            if entry(line).is_some_and(|(candidate, _)| candidate == key) {
-                found = true;
-                format!("{key} = {value}")
-            } else {
-                line.to_string()
-            }
-        })
-        .collect();
-    if !found {
-        lines.push(format!("{key} = {value}"));
-    }
-    let mut out = lines.join("\n");
-    out.push('\n');
-    out
-}
-
-pub fn clear_key(text: &str, key: &str) -> String {
-    let mut out = text
-        .lines()
-        .filter(|line| !entry(line).is_some_and(|(candidate, _)| candidate == key))
-        .collect::<Vec<_>>()
-        .join("\n");
-    out.push('\n');
-    out
+    cfg::set_key(text, key, value)
 }
 
 #[cfg(test)]
@@ -467,7 +395,7 @@ mod tests {
         let text = "# hello\nquality = high\nvsync = true\n";
         let text = set_key(text, "quality", "ultra");
         assert!(text.contains("# hello\nquality = ultra\n"));
-        let text = clear_key(&text, "vsync");
+        let text = cfg::clear_key(&text, "vsync");
         assert!(!text.contains("vsync = true"));
     }
 

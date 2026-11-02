@@ -1,9 +1,9 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
+mod palette;
+#[cfg(any(windows, test))]
 mod ui;
-#[cfg(windows)]
-mod win32;
 
 #[cfg(windows)]
 fn main() {
@@ -11,7 +11,7 @@ fn main() {
         Ok(code) => code,
         Err(error) => {
             app::log_line(&format!("error: {error}"));
-            win32::message("Colin McRae: DiRT launcher", &error, true);
+            app::fatal(&error);
             1
         }
     };
@@ -29,18 +29,21 @@ fn main() {
 #[cfg(windows)]
 mod app {
     use std::fs;
-    use std::io::Write as _;
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
     use dirt_launcher::config::{self, Settings};
     use dirt_launcher::form::Picture;
-    use dirt_launcher::{display, edition, hardware, pe, runtime};
+    use dirt_launcher::runtime::DXVK_MARKER;
+    use dirt_launcher::{display, edition, hardware, patches, runtime};
+    use rea_launcher::log::Log;
+    use rea_launcher::{cfg, fsx, identify, paths};
+    use rea_launcher_win32::report::{self, Mode};
+    use rea_launcher_win32::{display as screen, gpu, wine, xinput};
 
-    use crate::{ui, win32};
+    use crate::ui;
 
-    const EXE: &str = "DiRT.exe";
-    const DXVK_MARKER: &str = ".dirt-dxvk";
+    const TITLE: &str = "Colin McRae: DiRT launcher";
 
     fn home() -> PathBuf {
         std::env::var_os("LOCALAPPDATA")
@@ -50,15 +53,38 @@ mod app {
     }
 
     pub fn log_line(line: &str) {
-        let dir = home();
-        let _ = fs::create_dir_all(&dir);
-        if let Ok(mut file) = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(dir.join("launcher.log"))
-        {
-            let _ = writeln!(file, "{line}");
-        }
+        Log::new(home().join("launcher.log")).line(line);
+    }
+
+    /// Whether a person may be watching (not `--no-window` from a script).
+    fn interactive() -> bool {
+        !std::env::args().skip(1).any(|arg| arg == "--no-window")
+    }
+
+    /// An error the launcher stops on: a dialog when a person may be
+    /// watching, and stdout, which `dirt-play` and Proton keep in a log
+    /// (SDK `report`, so it reaches the player under Wine too).
+    pub fn fatal(text: &str) {
+        report::fatal(
+            TITLE,
+            text,
+            Mode::Play {
+                interactive: interactive(),
+            },
+        );
+    }
+
+    /// Output of a command (`--help`, `--check`): the terminal, or a
+    /// dialog when nobody sees it.
+    fn command(text: &str) {
+        report::note(
+            TITLE,
+            text,
+            Mode::Command {
+                interactive: interactive(),
+            },
+            false,
+        );
     }
 
     fn settings_path() -> PathBuf {
@@ -71,19 +97,25 @@ mod app {
         }
     }
 
+    fn launcher_dir() -> Option<PathBuf> {
+        std::env::current_exe()
+            .ok()?
+            .parent()
+            .map(Path::to_path_buf)
+    }
+
     fn find_game(settings: &Settings) -> Result<PathBuf, String> {
         if let Some(game) = &settings.game {
             return Ok(game.clone());
         }
-        if let Some(dir) = std::env::current_exe()
-            .ok()
-            .and_then(|path| path.parent().map(Path::to_path_buf))
-            && dir.join(EXE).is_file()
+        if let Some(dir) = launcher_dir()
+            && dir.join(edition::EXE).is_file()
         {
             return Ok(dir);
         }
         Err(format!(
-            "Choose the folder containing your official v1.22 {EXE}, or run:\n\nDiRTLauncher --game <folder>"
+            "Choose the folder containing your official v1.22 {}, or run:\n\nDiRTLauncher --game <folder>",
+            edition::EXE
         ))
     }
 
@@ -93,20 +125,14 @@ mod app {
         found
     }
 
-    fn launcher_dir() -> Option<PathBuf> {
-        std::env::current_exe()
-            .ok()?
-            .parent()
-            .map(Path::to_path_buf)
-    }
-
+    /// Copy the bundled DXVK d3d9.dll next to the runtime exe (Linux only).
     fn configure_dxvk(runtime: &Path, linux: bool) -> Result<(), String> {
         let marker = runtime.join(DXVK_MARKER);
         let destination = runtime.join("d3d9.dll");
         if !linux {
             if marker.is_file() {
-                let _ = fs::remove_file(destination);
-                let _ = fs::remove_file(marker);
+                let _ = fsx::remove(&destination);
+                let _ = fsx::remove(&marker);
             }
             return Ok(());
         }
@@ -119,15 +145,9 @@ mod app {
                 source.display()
             ));
         }
-        let same = fs::read(&source)
-            .ok()
-            .zip(fs::read(&destination).ok())
-            .is_some_and(|(a, b)| a == b);
-        if !same {
-            fs::copy(&source, &destination)
-                .map_err(|error| format!("cannot install DXVK into the runtime: {error}"))?;
-        }
-        fs::write(marker, b"d3d9.dll is managed by DiRTLauncher\n")
+        fsx::install_copy(&source, &destination)
+            .map_err(|error| format!("cannot install DXVK into the runtime: {error}"))?;
+        fsx::install(&marker, b"d3d9.dll is managed by DiRTLauncher\n")
             .map_err(|error| error.to_string())?;
         Ok(())
     }
@@ -140,7 +160,7 @@ mod app {
         let settings_path = settings_path();
         let mut cli: Vec<String> = std::env::args().skip(1).collect();
         if take_flag(&mut cli, "--help") {
-            win32::message("Colin McRae: DiRT launcher", config::USAGE, false);
+            command(config::USAGE);
             return Ok(0);
         }
         let settings_only = take_flag(&mut cli, "--settings");
@@ -149,22 +169,23 @@ mod app {
         let check_only = take_flag(&mut cli, "--check");
         let setup_only = take_flag(&mut cli, "--setup");
         if settings_only || (cli.is_empty() && !no_window && !check_only && !setup_only) {
-            if win32::is_wine() {
-                match win32::prefer_gpu_opengl() {
+            if wine::is_wine() {
+                match gpu::prefer_glx() {
                     Ok(true) => log_line("Wine settings window: OpenGL through GLX (UseEGL=N)"),
                     Ok(false) => {}
                     Err(error) => log_line(&format!("warning: {error}")),
                 }
             }
-            let text =
-                fs::read_to_string(&settings_path).unwrap_or_else(|_| config::TEMPLATE.into());
-            match ui::show(&settings_path, &text, linux) {
+            let saved = cfg::read_file(&settings_path).ok().flatten();
+            match ui::show(&settings_path, saved.as_deref(), linux) {
                 Ok(ui::Outcome::Play) => {
+                    log_line("settings window: play");
                     if settings_only {
                         return Ok(0);
                     }
                 }
                 Ok(ui::Outcome::Closed) => {
+                    log_line("settings window: closed");
                     return Ok(if settings_only { WINDOW_CLOSED } else { 0 });
                 }
                 Err(error) => {
@@ -176,7 +197,7 @@ mod app {
             }
         }
 
-        let existing = fs::read_to_string(&settings_path).ok();
+        let existing = cfg::read_file(&settings_path).ok().flatten();
         let file_text = existing.as_deref().unwrap_or(config::TEMPLATE);
         let (saved, warnings) = Settings::parse_file(file_text);
         for warning in warnings {
@@ -184,26 +205,22 @@ mod app {
         }
         let settings = saved.clone().merged(Settings::parse_args(cli)?);
         let game = find_game(&settings)?;
-        let exe_path = game.join(EXE);
+        let exe_path = game.join(edition::EXE);
         let exe_bytes = fs::read(&exe_path)
             .map_err(|error| format!("cannot read {}: {error}", exe_path.display()))?;
-        let detected = edition::identify(&exe_bytes).map_err(|digest| {
-            format!(
-                "This launcher supports the official DRM-free DiRT v1.22 only.\n\nUpdate your installation to v1.22 first.\n\nUnrecognised DiRT.exe SHA-256: {}",
-                edition::to_hex(&digest)
-            )
-        })?;
-        log_line(&format!("game: {} ({})", game.display(), detected.name));
+        let detected = edition::identify(&exe_bytes).map_err(|digest| edition::refusal(&digest))?;
+        log_line(&format!(
+            "game: {} ({}, SHA-256 {})",
+            game.display(),
+            detected.name,
+            identify::hex(&detected.sha256)
+        ));
         if check_only {
-            win32::message(
-                "Colin McRae: DiRT launcher",
-                &format!(
-                    "Ready to set up.\n\nGame folder: {}\nVersion: {}",
-                    game.display(),
-                    detected.name
-                ),
-                false,
-            );
+            command(&format!(
+                "Ready to set up.\n\nGame folder: {}\nVersion: {}",
+                game.display(),
+                detected.name
+            ));
             return Ok(0);
         }
 
@@ -211,23 +228,35 @@ mod app {
             .runtime
             .clone()
             .unwrap_or_else(|| home().join("DiRT"));
-        runtime::check_separate(&game, &runtime_dir)?;
-        let copied = runtime::sync(&game, &runtime_dir)
+        paths::check_separate(&game, &runtime_dir)?;
+        if !linux {
+            // Back on native Windows after a Linux run: drop our DXVK first,
+            // so the sync brings the player's own d3d9.dll (if any) back.
+            configure_dxvk(&runtime_dir, false)?;
+        }
+        let synced = runtime::sync(&game, &runtime_dir, linux)
             .map_err(|error| format!("cannot prepare {}: {error}", runtime_dir.display()))?;
+        for warning in &synced.warnings {
+            log_line(&format!("warning: {warning}"));
+        }
         log_line(&format!(
-            "runtime: {} ({copied} files copied)",
-            runtime_dir.display()
+            "runtime: {} ({} files copied)",
+            runtime_dir.display(),
+            synced.brought
         ));
 
-        let runtime_exe = runtime_dir.join(EXE);
-        let mut runtime_bytes = fs::read(&runtime_exe).map_err(|error| error.to_string())?;
-        if pe::set_large_address_aware(&mut runtime_bytes).map_err(|error| error.to_string())? {
-            fs::write(&runtime_exe, &runtime_bytes)
+        // Large Address Aware: from the game folder's pristine bytes into
+        // the private copy, checked against the known result's SHA-256.
+        let runtime_exe = runtime_dir.join(edition::EXE);
+        let patched = patches::runtime_exe(&exe_bytes)
+            .map_err(|error| format!("{}: Large Address Aware refused: {error}", edition::EXE))?;
+        if fs::read(&runtime_exe).ok().as_deref() != Some(&patched[..]) {
+            fsx::install(&runtime_exe, &patched)
                 .map_err(|error| format!("cannot enable Large Address Aware: {error}"))?;
             log_line("Large Address Aware enabled in the private runtime executable");
         }
 
-        let screen = win32::screen_size();
+        let screen = screen::screen_size();
         let mut picture = Picture {
             resolution: settings.resolution,
             aspect: settings.aspect,
@@ -236,10 +265,10 @@ mod app {
             vsync: settings.vsync.unwrap_or(true),
         }
         .resolved(screen);
-        let wine = win32::is_wine();
+        let wine = wine::is_wine();
         let gamescope = std::env::var_os("GAMESCOPE_WAYLAND_DISPLAY").is_some();
         let (width, height) = picture.resolution.unwrap();
-        let mode_supported = wine || win32::display_mode_supported(width, height);
+        let mode_supported = wine || screen::mode_supported(width, height);
         let (fullscreen, fallback) = display::effective_fullscreen(
             picture.fullscreen,
             wine,
@@ -285,14 +314,11 @@ mod app {
 
         if existing.is_none() || saved.game.as_ref() != Some(&game) {
             let text = config::set_key(file_text, "game", &game.display().to_string());
-            if let Some(parent) = settings_path.parent() {
-                fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-            }
-            fs::write(&settings_path, text)
+            fsx::write_atomic(&settings_path, text)
                 .map_err(|error| format!("cannot save {}: {error}", settings_path.display()))?;
         }
-        if !win32::is_wine() {
-            match win32::prefer_fast_gpu(&runtime_exe) {
+        if !wine {
+            match gpu::prefer_fast_gpu(&runtime_exe) {
                 Ok(true) => log_line("Windows high-performance GPU preference set"),
                 Ok(false) => {}
                 Err(error) => log_line(&format!("warning: {error}")),
@@ -316,7 +342,7 @@ mod app {
             .current_dir(&runtime_dir)
             .status()
             .map_err(|error| format!("cannot start {}: {error}", runtime_exe.display()))?;
-        win32::stop_rumble();
+        xinput::stop_rumble();
         let code = status.code().unwrap_or(1) as u32;
         log_line(&format!("game exited with {code}"));
         Ok(code)
