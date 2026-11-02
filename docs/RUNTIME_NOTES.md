@@ -85,16 +85,60 @@ private prefix, the owner's install read only):
 - A full package build (zip and AppImage) has the same layout as v0.1.x:
   `usr/lib/dirt/linux/d3d9.dll`, `rea-play.sh` beside `dirt-play`.
 
-Not yet checked in the real game (each needs a run):
+Not yet checked in the real game at that point; the 2026-11-02 real-game
+pass below settles all but the last item:
 
-- The DXVK `d3d9.dll` actually loaded through the per-exe override under
-  plain Proton (no `dirt-play`): `WINEDEBUG=+loaddll` should show the
-  copy's `d3d9.dll` as native.
-- `dirt-play` on `rea-play.sh`: a full race, then each way of quitting
-  (the game's Quit, Alt+F4, `dirt-play stop`, Ctrl+C, gamescope closed)
-  leaves no game, launcher, wineserver or gamescope behind.
-- A second launcher start while the game runs: the "already running"
-  message (exit 5), and no second game.
-- `aspect` values other than the screen's own and `vsync = off` change the
-  picture as described (seen so far only in the written XML).
-- Native Windows, the Steam Deck in Game Mode, Proton without the helper.
+- Native Windows, the Steam Deck in Game Mode, Proton itself (this host
+  has plain Wine 11.21 only) and a full race on `rea-play.sh`.
+
+## 2026-11-02: real-game verification (headless)
+
+Setup: the owner's v1.22 install (read only, over NFS), the release
+`DiRTLauncher.exe` built at each commit of this pass, DXVK 3.1.1's
+`x32/d3d9.dll` (pinned sha256 `40565b4a…`), a throwaway prefix, HOME and
+XDG dirs under `.work/realgame/`. Every run inside the `gaming` box under
+`env -i` (no host variables), a finite `timeout` inside the box,
+`gamescope --backend headless` (a PATH wrapper adds the flag to
+`dirt-play`'s gamescope), a private PipeWire with one null sink. Each run:
+`.work/realgame/go <timeout> <name> <look> "<steps>" --play`
+(`bin/run.sh`: starts `linux/dirt-play`, waits for `DiRT.exe`, takes
+`gamescopectl` screenshots, sends one quit, times it, then checks the
+process table by environment). Logs and screenshots:
+`.work/realgame/logs/<name>/`.
+
+| Check | Result | Evidence |
+|---|---|---|
+| First setup | **VERIFIED**: 14,713 files (11 GB) copied from NFS in 11 min 36 s; LAA build recognised | `logs/setup/` |
+| Original 2007 look | **VERIFIED**: XML `1280x720 aspect 16:9 vsync 1`, `graphics_detail medium`, 12-core map; gamescope 1280x720; DXVK swapchain FIFO; intro, profile, main menu rendered | `orig-stop/`, `nav4/grid.jpg` |
+| Steam Deck look | **VERIFIED** (values): XML `1280x800 16:10`, `high`; gamescope 1280x800; main menu rendered (not a Deck) | `q-wmclose/menu.jpg` |
+| Modern look | **VERIFIED**: `resolution = auto` headless is 1920x1080 (no screen to read); XML `1920x1080 16:9`, `ultra` | `q-scclose/menu.jpg` |
+| Saves | **VERIFIED**: v1.22 writes the profile and career to `savegame/Autosave0/` in the private copy (next to `DiRT.exe`); `Documents\Codemasters\DiRT` only holds the launcher's hardware XML | `find -newer` after the first profile (nav4) |
+| Game files the game writes | `savegame/`, `hardwaresettings/` only: nothing in the asset folders the copy now hard-links | same |
+| Game window title | **VERIFIED**: `DiRT`, class `NeonClass_41`; no clash with the launcher window's `Colin McRae: DiRT` (review item 5) | `orig-stop/closer.log` |
+| `dirt-play stop` | **VERIFIED**: game gone 0.12–0.46 s after, process table clean | every `*/run.log` |
+| The game's own Quit (Esc, Exit DiRT? Yes) | **VERIFIED**: exit 0; game gone 7.4 s after the key sequence began (about 5 s after the final Enter) | `q-own/` |
+| `WM_CLOSE` to the game window | **VERIFIED**: the game quits by itself (exit 0) in 6.2 s, clean | `q-wmclose/` |
+| `WM_SYSCOMMAND SC_CLOSE` (Alt+F4's path) | **VERIFIED**: exit 0 in 6.2 s, clean | `q-scclose/` |
+| Alt+F4 as X key presses | **VERIFIED**: exit 0 in 6.2 s, clean | `q-altf4/` |
+| `wine taskkill` (no /f) | **VERIFIED**: exit 0 in 6.4 s, clean | `q-taskkill/` |
+| gamescope killed | **VERIFIED**: game gone 0.42 s, clean | `q-killgs/` |
+| Ctrl+C / SIGTERM to `dirt-play` | **VERIFIED** with `DIRT_WAIT=1` (the AppImage's waiting mode): game gone 0.36 s, helper exit 143, clean. Without it `dirt-play --play` returns once the game is up (detached), so there is no helper left to signal: `dirt-play stop` is that mode's way | `q-sigint-wait/`, `q-sigterm-wait/`, `q-sigint/` |
+| Second launcher while the game runs | **VERIFIED**: `wine DiRTLauncher.exe --no-window --linux` shows the "already running" dialog (screenshot) and starts nothing; `dirt-play --play` prints "already running" (exit 0, the SDK's helper) and starts nothing; one `DiRT.exe` throughout | `second/second.jpg`, `second/run.log` |
+| VSync | **VERIFIED, visible**: Career screen, 1280x720: `vsync = on` 59.96–60.03 fps (DXVK `FIFO`), `vsync = off` 776–887 fps (`MAILBOX`) (Wine's `fps` trace). Tearing itself needs a real display | `vs-on/`, `vs-off/` |
+| Aspect | **VERIFIED, visible**: 1280x720 with `aspect = 4:3` stretches the picture sideways (wider text and 3D cards than 16:9, RMSE 0.17 on the Career screen). Kept; its description now says so | `asp-43/`, `vs-on/` (same screens) |
+| DXVK through the per-exe override, plain Wine | **VERIFIED**: plain `wine DiRTLauncher.exe --no-window --linux` in gamescope, no `dirt-play`, no `WINEDLLOVERRIDES` reaching the game: `+loaddll` shows the copy's `d3d9.dll` loaded **native**, `AppDefaults\DiRT.exe\DllOverrides d3d9 = native,builtin`. Without `--linux` (Proton's case) the launcher removes its override and DiRT loads Wine's builtin `d3d9` (wined3d on plain Wine; Proton would bring its own DXVK: NOT CHECKABLE here) | `plain-linux/loaddll.txt`, `plain-gs/` |
+| Isolated Wine desktop (raw Wine, no gamescope seen) | **VERIFIED**: `explorer /desktop=DiRT,1280x720` keeps the launcher waiting while the game runs (no "game exited" line until the desktop closed), so the one-instance guard holds for the whole game (review item 4) under Wine 11.21; Proton's `explorer` not checked. Closing the desktop window ended the game in 0.25 s | `plain-desktop2/` |
+| Hard-linked private copy (owner decision 3) | **VERIFIED** on real data: `--setup` with a v1.22 folder on the same drive as the copy: 14,000 of 14,734 files hard-linked, 29.8 MB copied, 21 s; source + copy together still 11 GB; no source file changed. The owner's NFS install can't be linked from a local copy (another filesystem): it is copied as before | `logs/linkcheck.out`, `bin/linkcheck.sh` |
+| Process table after every run | **VERIFIED** clean: no task with the test prefix or runtime dir (zombies and threads included) after each run | `bin/check.sh` output in `logs/batch*.out` |
+
+Notes:
+
+- The close requests take about 6 s: DiRT saves and tears down before it
+  exits by itself (exit 0), a little over the 5 s the standard asks. No
+  close hook needed; nothing is left behind.
+- Audio: the first two runs (`orig-stop` and a failed start before it)
+  had the owner's real ALSA devices visible to the private PipeWire, so
+  the intro's sound may have reached the host's audio interface for about
+  a minute. From `nav1` on, WirePlumber's device monitors were switched off
+  in the test HOME (`rea_null` the only sink).
+- Not checked: a race, sound itself, native Windows, Proton, a Steam Deck.
