@@ -155,7 +155,7 @@ underscores) and on the command line (with hyphens); `DiRTLauncher.exe
 | `look` / `--look` | Play: Look | `modern`, `steam-deck`, `original`, `custom` | worked out from the values | Sets the picture options at once; options given after it win. |
 | `workers` / `--workers` | none (advanced) | `auto`, `4`, `8`, `12` | `auto` | How many CPU threads the engine uses. Auto picks up to 12 from your CPU; set it only if a race still crashes while loading. |
 | `resolution` / `--resolution` | Picture: Resolution | `WIDTHxHEIGHT`, `auto` | your screen (1920×1080 if unknown) | The game's screen size. |
-| `aspect` / `--aspect` | Picture: Aspect | `auto`, `4:3`, `5:4`, `16:9`, `16:10` | from the resolution | The picture's shape. |
+| `aspect` / `--aspect` | Picture: Aspect | `auto`, `4:3`, `5:4`, `16:9`, `16:10` | from the resolution | The picture's shape. A shape that doesn't match the resolution stretches the picture (seen in the game). |
 | `quality` / `--quality` | Picture: Quality | `medium`, `high`, `ultra` | `ultra` | DiRT's own detail preset. |
 | `fullscreen` / `--fullscreen` | Display: Fullscreen | `on`, `off` | `on` | Fills the screen; off plays in a window. |
 | `vsync` / `--vsync` | Display: Vsync (60 Hz) | `on`, `off` | `on` | Waits for the screen's refresh at 60 Hz: no tearing. |
