@@ -333,9 +333,10 @@ mod app {
             log_line(&format!("warning: {warning}"));
         }
         log_line(&format!(
-            "runtime: {} ({} files copied)",
+            "runtime: {} ({} files brought over, {} of them hard-linked)",
             runtime_dir.display(),
-            synced.brought
+            synced.brought,
+            synced.linked
         ));
 
         let screen = screen::screen_size();
