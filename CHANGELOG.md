@@ -4,6 +4,12 @@
 
 ### Changed
 
+- The private copy hard-links the game's static data (tracks, cars,
+  audio, video and the other asset folders, about 9 GB, plus the game's
+  own DLLs) when it is on the same drive as the game, and copies the rest
+  (`DiRT.exe`, `system/`, settings). Every write into the copy replaces a
+  file, so a linked file is never written through. A copy made by an
+  earlier release keeps its files.
 - The worker map has no control in the window any more: Auto (up to 12
   threads from your CPU) is what fixes the race-load crash, and the Play
   tab says it is applied. `workers` stays an advanced `launcher.cfg` key

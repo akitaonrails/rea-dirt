@@ -189,7 +189,7 @@ forward, or says the game is already running (exit 5).
 | What | Windows | Linux (AppImage, `dirt-play`) |
 | --- | --- | --- |
 | Settings (`launcher.cfg`) and log (`launcher.log`) | `%LOCALAPPDATA%\DiRTLauncher\` | in the Wine prefix, `drive_c/users/<you>/AppData/Local/DiRTLauncher/` |
-| The launcher's copy of the game | `%LOCALAPPDATA%\DiRTLauncher\DiRT` (the `runtime` option moves it) | the same folder inside the prefix |
+| The launcher's copy of the game | `%LOCALAPPDATA%\DiRTLauncher\DiRT` (the `runtime` option moves it); on the game's drive its 9 GB of static data are hard links, not copies | the same folder inside the prefix |
 | DiRT's own settings and saves | `%USERPROFILE%\Documents\Codemasters\DiRT\`, and `hardwaresettings\` inside the private copy | the same, inside the prefix |
 | Wine prefix | — | `~/.local/share/dirt-launcher/prefix` |
 | `dirt-play`'s logs and lock | — | `~/.config/dirt-launcher` |

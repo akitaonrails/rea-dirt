@@ -25,15 +25,46 @@ pub fn is_owned(rel: &str, dxvk_managed: bool) -> bool {
         || (dxvk_managed && rel.eq_ignore_ascii_case("d3d9.dll"))
 }
 
-/// What DiRT's runtime copy needs: every game file is copied (nothing is
-/// hard-linked, as in every earlier release), the launcher's own files are
-/// never copied over. The generated worker maps and hardware XML are
-/// rewritten after each sync.
+/// The folders of static data DiRT only reads (about 9 GB of the 9.2 GB
+/// install): hard-linked into the runtime copy when the filesystem allows.
+const STATIC_TREES: [&str; 10] = [
+    "tracks",
+    "cars",
+    "audio",
+    "video",
+    "interiors",
+    "characters",
+    "frontend",
+    "anims",
+    "skidmarks",
+    "effects",
+];
+
+/// What DiRT's runtime copy needs: the static data is hard-linked (a copy
+/// where links are not possible: another drive, a read-only file), the
+/// rest copied, the launcher's own files never copied over. `DiRT.exe`
+/// (patched in the copy), `system/` (worker maps and hardware XML the
+/// launcher rewrites after each sync) and everything else are copies.
+/// Every later write into the copy is a whole-file swap, so a linked file
+/// is replaced, never written through.
 pub struct Dirt {
     pub dxvk_managed: bool,
 }
 
 impl Policy for Dirt {
+    fn link(&self, rel: &str) -> bool {
+        match rel.split_once('/') {
+            Some((top, _)) => STATIC_TREES
+                .iter()
+                .any(|tree| top.eq_ignore_ascii_case(tree)),
+            // The game's own DLLs at the top (d3d9.dll is the launcher's).
+            None => {
+                let lower = rel.to_ascii_lowercase();
+                lower.ends_with(".dll") && lower != "d3d9.dll"
+            }
+        }
+    }
+
     fn owned(&self, rel: &str, _source: Stamp) -> bool {
         is_owned(rel, self.dxvk_managed)
     }
@@ -106,6 +137,59 @@ mod tests {
         )
         .unwrap();
         assert_eq!(sync(&game, &runtime, false).unwrap().brought, 0);
+        fs::remove_dir_all(game.parent().unwrap()).unwrap();
+        fs::remove_dir_all(runtime.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn static_data_is_linked_and_the_rest_copied() {
+        let policy = Dirt {
+            dxvk_managed: true,
+        };
+        for linked in [
+            "tracks/locations/x.big",
+            "cars/models/car.big",
+            "audio/music.big",
+            "video/intro.bik",
+            "interiors/a.pssg",
+            "characters/c.pssg",
+            "frontend/f.big",
+            "anims/a.big",
+            "skidmarks/s.dds",
+            "effects/e.xml",
+            "binkw32.dll",
+            "protect.dll",
+        ] {
+            assert!(policy.link(linked), "{linked}");
+        }
+        for copied in [
+            "DiRT.exe",
+            "system/workerMap12Core.xml",
+            "system/hardware_settings_config.xml",
+            "hardwaresettings/hardware_settings_config.xml",
+            "database/cmr6game.bin",
+            "materials.xml",
+            "Tracks.txt",
+        ] {
+            assert!(!policy.link(copied), "{copied}");
+        }
+    }
+
+    /// A linked file is replaced, never written through: the launcher's
+    /// whole-file swaps leave the player's file as it was.
+    #[test]
+    fn writing_a_linked_file_never_changes_the_game() {
+        let game = temp("link-game");
+        let runtime = temp("link-runtime");
+        fs::create_dir_all(game.join("tracks")).unwrap();
+        fs::write(game.join("tracks/stage.big"), b"original").unwrap();
+        fs::write(game.join("DiRT.exe"), b"exe").unwrap();
+        let report = sync(&game, &runtime, true).unwrap();
+        assert_eq!((report.brought, report.linked), (2, 1));
+        rea_launcher::fsx::install(&runtime.join("tracks/stage.big"), b"changed").unwrap();
+        rea_launcher::fsx::install(&runtime.join("DiRT.exe"), b"patched").unwrap();
+        assert_eq!(fs::read(game.join("tracks/stage.big")).unwrap(), b"original");
+        assert_eq!(fs::read(game.join("DiRT.exe")).unwrap(), b"exe");
         fs::remove_dir_all(game.parent().unwrap()).unwrap();
         fs::remove_dir_all(runtime.parent().unwrap()).unwrap();
     }
