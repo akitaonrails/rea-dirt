@@ -1,0 +1,22 @@
+DiRTLauncher 0.1.1
+
+DiRTLauncher [options]
+
+  --game <folder>                           Game folder
+  --runtime <folder>                        Private copy
+  --look modern|steam-deck|original|custom  Look
+  --resolution <WxH>                        Resolution
+  --aspect auto|4:3|5:4|16:9|16:10          Aspect
+  --quality medium|high|ultra               Quality
+  --fullscreen on|off                       Fullscreen
+  --vsync on|off                            Vsync (60 Hz)
+  --workers auto|4|8|12                     Worker map
+  --scaler nearest|pixel|fsr|linear         Scaler (Linux helper)
+  --check                                   check the game folder and exit
+  --setup                                   prepare the private copy and the game's settings, without playing
+  --no-window                               play with the saved settings, no launcher window
+  --settings                                only show the settings window
+  --linux                                   running under dirt-play or the AppImage: install DXVK into the copy
+  --help                                    show this help
+
+Options override launcher.cfg for one run; only --game is remembered.

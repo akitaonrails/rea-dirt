@@ -1,0 +1,55 @@
+# Colin McRae: DiRT launcher settings.
+# key = value; lines starting with # are comments. An unset key gets the
+# launcher's default: your screen's size, its aspect, Ultra, fullscreen,
+# vsync and the automatic worker map. The settings window fills these in
+# when you press Play.
+
+# The folder with your official v1.22 DiRT.exe. It is only read, never
+# changed.
+# Values: a folder or file.
+#game =
+
+# Where the launcher keeps its fixed-up copy of the game. Default:
+# %LOCALAPPDATA%\DiRTLauncher\DiRT.
+# Values: a folder or file.
+#runtime =
+
+# A ready-made picture: Modern (your screen, Ultra), Steam Deck (1280x800,
+# High), Original 2007 (1280x720, Medium). On the command line it sets those
+# values for one run.
+# Values: modern, steam-deck, original or custom.
+#look =
+
+# The game's screen size; auto uses your screen (1920x1080 when it can't be
+# read).
+# Values: WIDTHxHEIGHT or auto.
+#resolution = 3840x2160
+
+# The picture's shape. Auto follows the resolution; pick another to match a
+# screen the resolution doesn't describe.
+# Values: auto, 4:3, 5:4, 16:9 or 16:10.
+#aspect =
+
+# DiRT's own detail preset. Medium is close to the 2007 look; High adds
+# sharper shadows and more detail; Ultra also draws further, with sharper
+# reflections.
+# Values: medium, high or ultra.
+#quality =
+
+# Fills the screen. Off plays in a window.
+# Values: on or off.
+#fullscreen =
+
+# Waits for the screen's refresh at 60 Hz: no tearing.
+# Values: on or off.
+#vsync =
+
+# How many CPU threads the game's engine uses. Auto picks up to 12 from your
+# CPU, which stops the crash while a race loads on modern processors.
+# Values: auto, 4, 8 or 12.
+#workers =
+
+# How gamescope scales the picture under Linux: Sharp, Even pixels, FSR
+# (upscaling and sharpening) or Smooth.
+# Values: nearest, pixel, fsr or linear.
+#scaler =

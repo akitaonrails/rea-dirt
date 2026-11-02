@@ -1,0 +1,344 @@
+# look-steam-deck
+
+## settings
+Settings {
+    game: Some(
+        "D:\\Games\\DiRT",
+    ),
+    runtime: None,
+    look: Some(
+        SteamDeck,
+    ),
+    resolution: Some(
+        Some(
+            (
+                1280,
+                800,
+            ),
+        ),
+    ),
+    aspect: Some(
+        Some(
+            Ratio1610,
+        ),
+    ),
+    quality: Some(
+        High,
+    ),
+    fullscreen: Some(
+        true,
+    ),
+    vsync: Some(
+        true,
+    ),
+    workers: Some(
+        Auto,
+    ),
+    scaler: Some(
+        Linear,
+    ),
+}
+
+## environment
+Env {
+    wine: true,
+    linux: true,
+    gamescope: false,
+    screen: Some(
+        (
+            3840,
+            2160,
+        ),
+    ),
+    mode_supported: false,
+    logical_cpus: 32,
+    dll_overrides: Some(
+        "mscoree,mshtml=",
+    ),
+    runtime: "C:\\users\\steamuser\\AppData\\Local\\DiRTLauncher\\DiRT",
+}
+
+## launch
+command: ["explorer", "/desktop=DiRT,1280x800", "C:\\users\\steamuser\\AppData\\Local\\DiRTLauncher\\DiRT\\DiRT.exe"]
+display fallback: Some(VirtualDesktop)
+picture: Picture { resolution: Some((1280, 800)), aspect: Some(Ratio1610), quality: High, fullscreen: true, vsync: true }
+workers: auto -> WorkerSelection { threshold: 12, configured_cores: 12 }
+gamescope scaler (Linux helper): linear
+WINEDLLOVERRIDES: Some("d3d9=n,b;mscoree,mshtml=")
+app DLL overrides (AppDefaults\DiRT.exe\DllOverrides = native,builtin): [d3d9]
+app DLL overrides taken back: []
+install DXVK d3d9.dll: true
+Windows GPU preference: false
+
+## patches (DiRT.exe in the private copy)
+large-address-aware: Lets the 32-bit game use up to 4 GB of memory
+  0x00013E: 22 01  (PE Characteristics: set IMAGE_FILE_LARGE_ADDRESS_AWARE)
+
+## system/workerMap8Core.xml
+<?xml version="1.0" encoding="utf-8"?>
+<workerMap>
+  <workerThread name="core_0" priority="abovenormal" core="0" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_1" priority="abovenormal" core="1" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_2" priority="abovenormal" core="2" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_3" priority="abovenormal" core="3" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_4" priority="abovenormal" core="4" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_5" priority="abovenormal" core="5" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_6" priority="abovenormal" core="6" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_7" priority="abovenormal" core="7" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <group name="generic_workers">
+    <worker name="core_1" />
+    <worker name="core_2" />
+    <worker name="core_3" />
+    <worker name="core_4" />
+    <worker name="core_5" />
+    <worker name="core_6" />
+    <worker name="core_7" />
+  </group>
+  <group name="collision">
+    <worker name="core_7" />
+    <worker name="core_5" />
+  </group>
+  <group name="solver">
+    <worker name="core_7" />
+    <worker name="core_6" />
+  </group>
+  <group name="plugin_finalise">
+    <worker name="core_5" />
+  </group>
+  <group name="cloth">
+  </group>
+  <group name="handling">
+    <worker name="core_7" />
+    <worker name="core_5" />
+  </group>
+  <group name="ai">
+    <worker name="core_7" />
+    <worker name="core_6" />
+  </group>
+  <group name="vehicleSingleThreaded">
+    <worker name="core_0" />
+    <worker name="core_1" />
+    <worker name="core_2" />
+    <worker name="core_3" />
+    <worker name="core_4" />
+    <worker name="core_5" />
+    <worker name="core_6" />
+    <worker name="core_7" />
+  </group>
+  <group name="pfx">
+    <worker name="core_7" />
+  </group>
+  <group name="anim">
+    <worker name="core_3" />
+    <worker name="core_4" />
+  </group>
+  <group name="in_car_characters">
+    <worker name="core_1" />
+    <worker name="core_2" />
+    <worker name="core_3" />
+    <worker name="core_4" />
+    <worker name="core_5" />
+    <worker name="core_6" />
+    <worker name="core_7" />
+  </group>
+  <group name="view_manager">
+    <worker name="core_2" />
+    <worker name="core_3" />
+  </group>
+  <group name="storage">
+    <worker name="core_1" />
+    <worker name="core_2" />
+    <worker name="core_3" />
+    <worker name="core_4" />
+    <worker name="core_5" />
+    <worker name="core_6" />
+    <worker name="core_7" />
+  </group>
+  <group name="pssg_storage">
+    <worker name="core_5" />
+  </group>
+  <group name="osdUpdateSet">
+    <worker name="core_6" />
+  </group>
+  <group name="ground_cover">
+    <worker name="core_6" />
+  </group>
+</workerMap>
+
+
+## system/workerMap12Core.xml
+<?xml version="1.0" encoding="utf-8"?>
+<workerMap>
+  <workerThread name="core_0" priority="abovenormal" core="0" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_1" priority="abovenormal" core="1" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_2" priority="abovenormal" core="2" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_3" priority="abovenormal" core="3" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_4" priority="abovenormal" core="4" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_5" priority="abovenormal" core="5" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_6" priority="abovenormal" core="6" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_7" priority="abovenormal" core="7" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_8" priority="abovenormal" core="8" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_9" priority="abovenormal" core="9" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_10" priority="abovenormal" core="10" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <workerThread name="core_11" priority="abovenormal" core="11" stacksize="131072" jobpoolsize="131072" maxMessages="512" />
+  <group name="generic_workers">
+    <worker name="core_1" />
+    <worker name="core_2" />
+    <worker name="core_3" />
+    <worker name="core_4" />
+    <worker name="core_5" />
+    <worker name="core_6" />
+    <worker name="core_7" />
+    <worker name="core_8" />
+    <worker name="core_9" />
+    <worker name="core_10" />
+    <worker name="core_11" />
+  </group>
+  <group name="collision">
+    <worker name="core_11" />
+    <worker name="core_5" />
+  </group>
+  <group name="solver">
+    <worker name="core_11" />
+    <worker name="core_6" />
+  </group>
+  <group name="plugin_finalise">
+    <worker name="core_5" />
+  </group>
+  <group name="cloth">
+  </group>
+  <group name="handling">
+    <worker name="core_11" />
+    <worker name="core_5" />
+  </group>
+  <group name="ai">
+    <worker name="core_11" />
+    <worker name="core_6" />
+  </group>
+  <group name="vehicleSingleThreaded">
+    <worker name="core_0" />
+    <worker name="core_1" />
+    <worker name="core_2" />
+    <worker name="core_3" />
+    <worker name="core_4" />
+    <worker name="core_5" />
+    <worker name="core_6" />
+    <worker name="core_7" />
+    <worker name="core_8" />
+    <worker name="core_9" />
+    <worker name="core_10" />
+    <worker name="core_11" />
+  </group>
+  <group name="pfx">
+    <worker name="core_11" />
+  </group>
+  <group name="anim">
+    <worker name="core_3" />
+    <worker name="core_4" />
+  </group>
+  <group name="in_car_characters">
+    <worker name="core_5" />
+    <worker name="core_6" />
+    <worker name="core_7" />
+  </group>
+  <group name="view_manager">
+    <worker name="core_2" />
+    <worker name="core_3" />
+  </group>
+  <group name="storage">
+    <worker name="core_1" />
+    <worker name="core_2" />
+    <worker name="core_3" />
+    <worker name="core_4" />
+    <worker name="core_5" />
+    <worker name="core_6" />
+    <worker name="core_7" />
+    <worker name="core_8" />
+    <worker name="core_9" />
+    <worker name="core_10" />
+    <worker name="core_11" />
+  </group>
+  <group name="pssg_storage">
+    <worker name="core_5" />
+  </group>
+  <group name="osdUpdateSet">
+    <worker name="core_6" />
+  </group>
+  <group name="ground_cover">
+    <worker name="core_6" />
+  </group>
+</workerMap>
+
+
+## system/hardware_settings_restrictions.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<hardware_settings_restrictions>
+  <cpu>
+    <restrict_info>
+      <restrict_if name="cores" op="int_eq" value="2">
+        <restrict_add>
+          <threadStrategy parallelUpdateRender="true" workerMapFile="system/workerMap2Core.xml" forceFeedbackProcessor="1" dvdStorageProcessor="1" dataSetMonitorProcessor="0" renderProcessor="0" updateProcessor="1" fileStreamProcessor="1" />
+        </restrict_add>
+      </restrict_if>
+      <restrict_if name="cores" op="int_eq" value="3">
+        <restrict_add>
+          <threadStrategy parallelUpdateRender="true" workerMapFile="system/workerMap2Core.xml" forceFeedbackProcessor="1" dvdStorageProcessor="1" dataSetMonitorProcessor="0" renderProcessor="0" updateProcessor="1" fileStreamProcessor="1" />
+        </restrict_add>
+      </restrict_if>
+      <restrict_if name="cores" op="int_eq" value="4">
+        <restrict_add>
+          <threadStrategy parallelUpdateRender="true" workerMapFile="system/workerMap4Core.xml" forceFeedbackProcessor="3" dvdStorageProcessor="3" dataSetMonitorProcessor="1" renderProcessor="0" updateProcessor="2" fileStreamProcessor="3" />
+        </restrict_add>
+      </restrict_if>
+      <restrict_if name="cores" op="int_eq" value="6">
+        <restrict_add>
+          <threadStrategy parallelUpdateRender="true" workerMapFile="system/workerMap4Core.xml" forceFeedbackProcessor="3" dvdStorageProcessor="3" dataSetMonitorProcessor="1" renderProcessor="0" updateProcessor="2" fileStreamProcessor="3" />
+        </restrict_add>
+      </restrict_if>
+      <restrict_if name="cores" op="int_ge" value="12">
+        <restrict_add>
+          <threadStrategy parallelUpdateRender="true" workerMapFile="system/workerMap12Core.xml" forceFeedbackProcessor="6" dvdStorageProcessor="7" dataSetMonitorProcessor="4" renderProcessor="0" updateProcessor="2" fileStreamProcessor="5" />
+        </restrict_add>
+      </restrict_if>
+      <restrict_if name="hyperThreading" op="bo_eq" value="true">
+        <restrict_add>
+          <threadStrategy parallelUpdateRender="true" workerMapFile="system/workerMap2Core.xml" forceFeedbackProcessor="1" dvdStorageProcessor="1" dataSetMonitorProcessor="0" renderProcessor="0" updateProcessor="1" fileStreamProcessor="1" />
+        </restrict_add>
+      </restrict_if>
+      <restrict_else>
+        <restrict_add>
+          <threadStrategy parallelUpdateRender="false" workerMapFile="system/workerMap.xml" forceFeedbackProcessor="0" dvdStorageProcessor="0" dataSetMonitorProcessor="0" renderProcessor="0" updateProcessor="0" fileStreamProcessor="0" />
+        </restrict_add>
+      </restrict_else>
+    </restrict_info>
+  </cpu>
+</hardware_settings_restrictions>
+
+
+## system/hardware_settings_config.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<hardware_settings_config version="30">
+  <cpu><threadStrategy parallelUpdateRender="true" workerMapFile="system/workerMap12Core.xml" forceFeedbackProcessor="6" dvdStorageProcessor="7" dataSetMonitorProcessor="4" renderProcessor="0" updateProcessor="2" fileStreamProcessor="5"/></cpu>
+  <graphics_card>
+    <resolution width="1280" height="800" aspect="16:10" fullscreen="true" vsync="1"><refreshRate rate="60"/></resolution>
+    <gamma level="1.0" />
+    <multisampling level="4"><back_buffer level="4"/><colour_target level="4"/><minimap level="4"/><codriver_icon level="4"/><dynamic_envmap level="0"/><static_envmap level="0"/><rear_view_mirror level="0"/></multisampling>
+    <textures lod="0"/>
+  </graphics_card>
+  <graphics_detail level="high"/>
+  <wind particles="true" groundcover="true"/>
+  <shadows enabled="true" size="2048" maskQuality="2"/>
+  <particles enabled="true" collisions="true" max="4000"/>
+  <crowd enabled="true" lodQuality="2"/>
+  <postprocess blur="true" hdr="true" />
+  <groundcover enabled="true" layers="4"/>
+  <trees visibility="2000" low="180" high="60" lodQuality="2"/>
+  <visibility level="high" clip="15000" cull="2000"/>
+  <vehicles characterQuality="2" lodQuality="2"/>
+  <reflections faces="6" size="256" forceBilinear="true"/>
+  <mirrors forceBilinear="true" left_w="128" left_h="128" middle_w="384" middle_h="256" right_w="64" right_h="64" fmt16bit="true" enabled="true"/>
+  <skidmarks enabled="true"/>
+  <dynamic_ambient_occ enabled="true"/>
+  <motion enabled="false" ip="127.0.0.1" port="20777" delay="1" extradata="0" />
+</hardware_settings_config>
+
