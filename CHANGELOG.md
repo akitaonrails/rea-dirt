@@ -61,6 +61,8 @@
   instead of being replaced by the template.
 - The private copy's overlap check failed under Windows path rules.
 - `launcher.log` is capped at 1 MiB.
+- `dirt-play --play --setup --scaler fsr` (any launcher switch before a
+  one-run flag) read `--scaler` as the switch's value and dropped it.
 
 ## v0.1.1 — 2026-11-01
 

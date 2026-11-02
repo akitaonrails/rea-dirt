@@ -84,6 +84,12 @@ contains "the flags reach the launcher" "$(cat "$T/ran" 2>/dev/null)" "--no-wind
 rm -f "$T/ran"; sh "$T/repo/linux/dirt-play" --play --fullscreen off > /dev/null 2>&1
 case "$(cat "$T/ran" 2>/dev/null)" in *gamescope*) fail "--fullscreen off must skip gamescope" ;; *) ok "--fullscreen off skips gamescope" ;; esac
 check "launcher.cfg unchanged" "$(cat "$cfg")" "$(printf 'resolution = 3840x2160\nscaler = linear')"
+echo "# every launcher switch takes no value: the next flag is still read"
+for sw in --setup --help --check --no-window --linux; do
+  printf 'resolution = 3840x2160\nscaler = linear\n' > "$cfg"
+  rm -f "$T/ran"; sh "$T/repo/linux/dirt-play" --play $sw --scaler fsr > /dev/null 2>&1
+  contains "$sw then --scaler fsr" "$(cat "$T/ran" 2>/dev/null)" "-F fsr --"
+done
 rm -f "$cfg"
 
 echo "# tests source the script: REA_FUNCTIONS_ONLY=1 + REA_PLAY_HERE"

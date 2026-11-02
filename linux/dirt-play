@@ -55,6 +55,9 @@ REA_WINDOWED_VALUES="off false no 0"
 # Keys the helper reads itself: a play run's --scaler, --resolution or
 # --fullscreen (e.g. dirt-play --play --scaler fsr) applies to that run.
 REA_HELPER_KEYS="scaler resolution fullscreen"
+# Every value-less launcher switch (config.rs SWITCHES), so a one-run flag
+# after one (--setup --scaler fsr) is still read.
+REA_FLAG_SWITCHES="--check --setup --no-window --settings --linux --help"
 
 rea_init || exit 1
 # Tests load the configuration and hooks without running anything.
