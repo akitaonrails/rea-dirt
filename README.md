@@ -9,6 +9,10 @@ controller translators, winetricks commands, or manual XML edits.
 
 ![DiRTLauncher with an official v1.22 game detected](docs/images/launcher.png)
 
+[![DiRT gameplay at 4K with the launcher](https://new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/dirt-launcher/showcase-poster.jpg)](https://new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/dirt-launcher/showcase-h264.mp4)
+
+*A full race at 4K, 16:9 widescreen, Ultra graphics, and native XInput. Click to watch.*
+
 ## Why use it instead of the standalone PC game?
 
 | Standalone 2007 installation | DiRTLauncher |
