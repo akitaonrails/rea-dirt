@@ -47,7 +47,10 @@ linux/dirt-play status      # running or idle
 ```
 
 Launcher options after `--play` apply to that run, for example
-`linux/dirt-play --play --resolution 1920x1080`. When Wine and gamescope live in
+`linux/dirt-play --play --resolution 1920x1080`. gamescope gets the size the
+game runs at: the resolution, or with none set the look's (Modern your
+screen, Steam Deck 1280x800, Original 2007 1280x720); `auto` is your screen,
+and with nothing set it is 1920x1080. When Wine and gamescope live in
 a [distrobox](https://github.com/containers/distrobox), run it through the
 container:
 

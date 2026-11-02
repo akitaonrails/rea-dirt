@@ -90,6 +90,32 @@ for sw in --setup --help --check --no-window --linux; do
   rm -f "$T/ran"; sh "$T/repo/linux/dirt-play" --play $sw --scaler fsr > /dev/null 2>&1
   contains "$sw then --scaler fsr" "$(cat "$T/ran" 2>/dev/null)" "-F fsr --"
 done
+
+echo "# a look without a resolution sizes gamescope as the launcher sizes the game"
+# The screen: a fake xrandr reporting $SCREEN as the current mode.
+mkdir -p "$T/bin"
+printf '#!/bin/sh\n[ -n "$SCREEN" ] && echo "   $SCREEN     60.00*+"\n' > "$T/bin/xrandr"
+chmod +x "$T/bin/xrandr"
+size() { rm -f "$T/ran"; SCREEN=${SCREEN:-} PATH=$T/bin:$PATH sh "$T/repo/linux/dirt-play" --play "$@" > /dev/null 2>&1; cat "$T/ran" 2>/dev/null; }
+printf 'look = steam-deck\n' > "$cfg"
+contains "file look steam-deck: 1280x800" "$(size)" "gamescope -W 1280 -H 800 -w 1280 -h 800"
+printf 'look = original\n' > "$cfg"
+contains "file look original: 1280x720" "$(size)" "gamescope -W 1280 -H 720"
+printf 'look = Modern\n' > "$cfg"
+contains "file look modern: the screen" "$(SCREEN=2560x1440 size)" "gamescope -W 2560 -H 1440"
+printf 'look = custom\n' > "$cfg"
+contains "file look custom sets nothing" "$(size)" "gamescope -W 1920 -H 1080"
+printf 'resolution = auto\n' > "$cfg"
+contains "resolution auto: the screen" "$(SCREEN=3440x1440 size)" "gamescope -W 3440 -H 1440"
+contains "resolution auto, no screen: 1920x1080" "$(SCREEN= size)" "gamescope -W 1920 -H 1080"
+printf 'look = steam-deck\nresolution = 2560x1080\n' > "$cfg"
+contains "the file's resolution wins over its look" "$(size)" "gamescope -W 2560 -H 1080"
+contains "--look wins over the file's resolution" "$(size --look steam-deck)" "gamescope -W 1280 -H 800"
+contains "--look=original too" "$(size --look=original)" "gamescope -W 1280 -H 720"
+contains "--look modern: the screen" "$(SCREEN=2560x1600 size --look modern)" "gamescope -W 2560 -H 1600"
+contains "--resolution wins over --look" "$(size --look steam-deck --resolution 1920x1200)" "gamescope -W 1920 -H 1200"
+contains "--resolution auto: the screen" "$(SCREEN=2560x1440 size --resolution auto)" "gamescope -W 2560 -H 1440"
+contains "the flags still reach the launcher" "$(size --look steam-deck)" "--no-window --linux --look steam-deck"
 rm -f "$cfg"
 
 echo "# tests source the script: REA_FUNCTIONS_ONLY=1 + REA_PLAY_HERE"

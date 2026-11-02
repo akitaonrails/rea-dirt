@@ -54,10 +54,47 @@ REA_WINDOWED_KEY=fullscreen       # fullscreen = off: no gamescope of our own
 REA_WINDOWED_VALUES="off false no 0"
 # Keys the helper reads itself: a play run's --scaler, --resolution or
 # --fullscreen (e.g. dirt-play --play --scaler fsr) applies to that run.
-REA_HELPER_KEYS="scaler resolution fullscreen"
+REA_HELPER_KEYS="scaler resolution fullscreen look"
 # Every value-less launcher switch (config.rs SWITCHES), so a one-run flag
 # after one (--setup --scaler fsr) is still read.
 REA_FLAG_SWITCHES="--check --setup --no-window --settings --linux --help"
+
+# The gamescope size a look gives, as the launcher sizes the game
+# (config.rs Look::preset): Modern the screen, Steam Deck 1280x800,
+# Original 2007 1280x720; Custom sets nothing.
+dirt_look_size() {
+  case $1 in
+    modern) rea_screen_size || echo 1920x1080 ;;
+    steam-deck) echo 1280x800 ;;
+    original) echo 1280x720 ;;
+    *) return 1 ;;
+  esac
+}
+
+# This run's gamescope size, into REA_ONE_RUN (which rea_game_size reads
+# first), in the launcher's order: --resolution, then --look, then the
+# file's resolution, then the file's look. `auto` is the screen.
+rea_hook_before_start() {
+  _dirt_size=
+  _dirt_res=$(REA_CFG=; rea_get_value resolution)
+  if [ -z "$_dirt_res" ]; then
+    _dirt_look=$(REA_CFG=; rea_get_value look)
+    [ -n "$_dirt_look" ] && { _dirt_size=$(dirt_look_size "$_dirt_look") || _dirt_size=; }
+  fi
+  if [ -z "$_dirt_res" ] && [ -z "$_dirt_size" ] && [ -n "$REA_CFG" ]; then
+    _dirt_res=$(rea_get_value resolution "$REA_CFG")
+    if [ -z "$_dirt_res" ]; then
+      _dirt_look=$(rea_get_value look "$REA_CFG")
+      [ -n "$_dirt_look" ] && { _dirt_size=$(dirt_look_size "$_dirt_look") || _dirt_size=; }
+    fi
+  fi
+  if [ "$(printf '%s' "$_dirt_res" | tr -d ' \t\r')" = auto ]; then
+    _dirt_size=$(rea_screen_size) || _dirt_size=1920x1080
+  fi
+  [ -n "$_dirt_size" ] || return 0
+  REA_ONE_RUN="${REA_ONE_RUN:+$REA_ONE_RUN
+}resolution=$_dirt_size"
+}
 
 rea_init || exit 1
 # Tests load the configuration and hooks without running anything.

@@ -63,6 +63,11 @@
 - `launcher.log` is capped at 1 MiB.
 - `dirt-play --play --setup --scaler fsr` (any launcher switch before a
   one-run flag) read `--scaler` as the switch's value and dropped it.
+- `dirt-play` sized gamescope 1920x1080 for `resolution = auto` and for a
+  look without a resolution (`--look steam-deck` played 1280x800 inside a
+  1920x1080 gamescope). It now uses the screen for `auto` and Modern, and
+  the look's size otherwise, with flags over `launcher.cfg` as in the
+  launcher.
 
 ## v0.1.1 — 2026-11-01
 
