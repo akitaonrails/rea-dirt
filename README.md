@@ -190,7 +190,8 @@ forward, or says the game is already running (exit 5).
 | --- | --- | --- |
 | Settings (`launcher.cfg`) and log (`launcher.log`) | `%LOCALAPPDATA%\DiRTLauncher\` | in the Wine prefix, `drive_c/users/<you>/AppData/Local/DiRTLauncher/` |
 | The launcher's copy of the game | `%LOCALAPPDATA%\DiRTLauncher\DiRT` (the `runtime` option moves it); on the game's drive its 9 GB of static data are hard links, not copies | the same folder inside the prefix |
-| DiRT's own settings and saves | `%USERPROFILE%\Documents\Codemasters\DiRT\`, and `hardwaresettings\` inside the private copy | the same, inside the prefix |
+| DiRT's saves (profile, career) | `savegame\` inside the private copy (`%LOCALAPPDATA%\DiRTLauncher\DiRT\savegame`) | the same, inside the prefix |
+| DiRT's graphics settings | `hardwaresettings\` inside the private copy, and `%USERPROFILE%\Documents\Codemasters\DiRT\` | the same, inside the prefix |
 | Wine prefix | — | `~/.local/share/dirt-launcher/prefix` |
 | `dirt-play`'s logs and lock | — | `~/.config/dirt-launcher` |
 
@@ -228,12 +229,13 @@ setting).
 
 ## Uninstall
 
-1. **Back up your saves first**: `Documents\Codemasters\DiRT` (inside the
-   Wine prefix on Linux), and the private copy's `hardwaresettings` folder
-   if you want your graphics settings.
+1. **Back up your saves first**: the private copy's `savegame` folder,
+   `%LOCALAPPDATA%\DiRTLauncher\DiRT\savegame` (inside the Wine prefix
+   on Linux). Saves in your game folder's own `savegame` folder are
+   brought into the copy on the first start and never overwritten.
 2. Delete the folder you unzipped the launcher into (or the AppImage).
-3. Windows: delete `%LOCALAPPDATA%\DiRTLauncher` (settings, log and the
-   private copy of the game).
+3. Windows: delete `%LOCALAPPDATA%\DiRTLauncher` (settings, log, the
+   private copy of the game and its saves).
 4. Linux: copy your saves out of the prefix, then delete
    `~/.local/share/dirt-launcher` and `~/.config/dirt-launcher`. With
    Proton, removing the shortcut in Steam offers to delete its prefix,

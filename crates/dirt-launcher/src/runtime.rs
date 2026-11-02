@@ -65,6 +65,16 @@ impl Policy for Dirt {
         }
     }
 
+    /// The saves (`savegame/`, where v1.22 keeps them, next to its exe)
+    /// and the game's settings cache (`hardwaresettings/`): a player's
+    /// files in the game folder come over once, then the copy's are the
+    /// game's and are never overwritten.
+    fn game_written(&self, rel: &str, _source: Stamp) -> bool {
+        rel.split_once('/').is_some_and(|(top, _)| {
+            top.eq_ignore_ascii_case("savegame") || top.eq_ignore_ascii_case("hardwaresettings")
+        })
+    }
+
     fn owned(&self, rel: &str, _source: Stamp) -> bool {
         is_owned(rel, self.dxvk_managed)
     }
@@ -190,6 +200,30 @@ mod tests {
         rea_launcher::fsx::install(&runtime.join("DiRT.exe"), b"patched").unwrap();
         assert_eq!(fs::read(game.join("tracks/stage.big")).unwrap(), b"original");
         assert_eq!(fs::read(game.join("DiRT.exe")).unwrap(), b"exe");
+        fs::remove_dir_all(game.parent().unwrap()).unwrap();
+        fs::remove_dir_all(runtime.parent().unwrap()).unwrap();
+    }
+
+    /// v1.22 keeps its saves in `savegame/` next to `DiRT.exe` (seen in
+    /// the real game, 2026-11-02): a player's saves in the game folder
+    /// come over once, then the copy's own progress is never overwritten.
+    #[test]
+    fn saves_come_over_once_and_are_then_the_games() {
+        let game = temp("save-game");
+        let runtime = temp("save-runtime");
+        fs::create_dir_all(game.join("savegame/Autosave0")).unwrap();
+        fs::write(game.join("savegame/Autosave0/QKSNQLYU"), b"old progress").unwrap();
+        fs::write(game.join("DiRT.exe"), b"exe").unwrap();
+        assert_eq!(sync(&game, &runtime, true).unwrap().brought, 2);
+        let save = runtime.join("savegame/Autosave0/QKSNQLYU");
+        assert_eq!(fs::read(&save).unwrap(), b"old progress");
+        fs::write(&save, b"new progress").unwrap();
+        fs::write(game.join("savegame/Autosave0/QKSNQLYU"), b"changed in the folder").unwrap();
+        assert_eq!(sync(&game, &runtime, true).unwrap().brought, 0);
+        assert_eq!(fs::read(&save).unwrap(), b"new progress");
+        let policy = Dirt { dxvk_managed: true };
+        assert!(!policy.link("savegame/Autosave0/QKSNQLYU"));
+        assert!(policy.game_written("hardwaresettings/hardware_settings_info.xml", stamp(1, 1)));
         fs::remove_dir_all(game.parent().unwrap()).unwrap();
         fs::remove_dir_all(runtime.parent().unwrap()).unwrap();
     }

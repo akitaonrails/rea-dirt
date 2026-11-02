@@ -84,12 +84,12 @@ entry, and every change that still needs a real-game check a line in
 - **Renderer, input:** Direct3D 9 (DXVK 3.1.1 bundled for Linux, loaded
   through `d3d9=n,b` and DiRT.exe's per-exe Wine override), native
   XInput: no controller layer and no enable toggle.
-- **Files the game writes:** `hardwaresettings/hardware_settings_config.xml`
-  in the runtime copy (the one v1.22 reads) and in
-  `Documents\Codemasters\DiRT`; where v1.22 keeps its saves (Documents or
-  the runtime copy) is not verified yet, so sync must never overwrite
-  either. Never delete DiRT's
-  hardware-settings cache: write the chosen worker map and graphics into it.
+- **Files the game writes:** `hardwaresettings/` in the runtime copy (the
+  one v1.22 reads; the launcher also writes `Documents\Codemasters\DiRT`)
+  and its saves in the runtime copy's `savegame/` (verified 2026-11-02).
+  Both are `game_written`: brought from the game folder once, never
+  overwritten. Never delete DiRT's hardware-settings cache: write the
+  chosen worker map and graphics into it.
 - **Options:** keep them specific to DiRT and verified in the real game.
 - **Owner decisions:** the Colin McRae photo (CC BY 2.0, credited in the
   window). No official art, no DRM work (v1.22 itself removed the disc check).

@@ -60,6 +60,10 @@
 
 ### Fixed
 
+- The README sent you to back up `Documents\Codemasters\DiRT`, but v1.22
+  keeps its saves in `savegame` inside the private copy. Saves in your
+  game folder's own `savegame` (and its `hardwaresettings`) are brought
+  into the copy once and never overwritten by a later start.
 - Under `dirt-play`, the AppImage and Proton, an error while starting to
   play (no game folder, an unknown `DiRT.exe`, another launcher running)
   only reached a log: their game run passes `--no-window`. Under Wine it is
