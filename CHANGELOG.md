@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.2.0 — 2026-11-02
+
 ### Changed
 
 - The private copy hard-links the game's static data (tracks, cars,
