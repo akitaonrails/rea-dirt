@@ -37,6 +37,12 @@
   second game from the same private copy. `--setup` while the window is
   open says so and exits 5. `--check` may still run next to a game.
 
+- The settings window has a fourth tab, **Display** (fullscreen, vsync and
+  the Linux scaler), so no tab needs scrolling. Its colours meet WCAG AA:
+  the accent is a touch lighter (#e2563b), borders reach 3:1, Play's hover
+  is a lighter accent instead of yellow, and the photo caption sits on a
+  solid backing. Error messages say what to do.
+
 ### Fixed
 
 - Under Wine and Proton the game is told to load the bundled DXVK

@@ -52,7 +52,7 @@ fn tab(ui: &mut Harness<'static, Window>, name: &str) {
 #[test]
 fn every_tab_renders() {
     let (mut ui, _) = open(None, true, "tabs");
-    for name in ["Picture", "Controls", "Play"] {
+    for name in ["Picture", "Display", "Controls", "Play"] {
         tab(&mut ui, name);
         assert!(testing::checked(&ui.get_by_role_and_label(Role::Tab, name)));
     }
@@ -111,7 +111,7 @@ fn ready(ui: &mut Harness<'static, Window>) {
 #[test]
 fn the_window_matches_the_option_table() {
     let (mut ui, _) = open(None, true, "parity");
-    for name in ["Picture", "Controls", "Play"] {
+    for name in ["Picture", "Display", "Controls", "Play"] {
         tab(&mut ui, name);
     }
     spec::assert_parity(OPTIONS, &rendered_keys(&ui.ctx));
@@ -136,9 +136,11 @@ fn every_option_control_is_labelled_and_described() {
         assert!(ui.query_by_label(look).is_some(), "{look}");
     }
     tab(&mut ui, "Picture");
-    for key in ["resolution", "aspect", "quality", "scaler"] {
+    for key in ["resolution", "aspect", "quality"] {
         row(&ui, key, Role::RadioGroup);
     }
+    tab(&mut ui, "Display");
+    row(&ui, "scaler", Role::RadioGroup);
     for key in ["fullscreen", "vsync"] {
         row(&ui, key, Role::Switch);
     }
@@ -159,6 +161,7 @@ fn picture_controls_change_the_form_and_make_the_look_custom() {
         ui.query_by_label_contains("Runs at 2560×1440, 4:3")
             .is_some()
     );
+    tab(&mut ui, "Display");
     for name in ["Fullscreen", "Vsync (60 Hz)"] {
         ui.get_by_role_and_label(Role::Switch, name).scroll_to_me();
         ui.run();
@@ -187,7 +190,7 @@ fn play_tab_controls_change_the_form() {
 #[test]
 fn the_scaler_says_why_it_is_off_without_the_linux_helper() {
     let (mut ui, _) = open(None, false, "disabled");
-    tab(&mut ui, "Picture");
+    tab(&mut ui, "Display");
     let fsr = ui.get_by_label("FSR");
     assert!(testing::disabled(&fsr));
     assert!(testing::description(&fsr).unwrap().contains("gamescope"));

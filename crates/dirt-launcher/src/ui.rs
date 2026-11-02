@@ -44,14 +44,16 @@ pub struct Host {
 pub enum Tab {
     Play,
     Picture,
+    Display,
     Controls,
 }
 
 impl Tab {
-    const ALL: [Tab; 3] = [Tab::Play, Tab::Picture, Tab::Controls];
-    const NAMES: [(Tab, &str); 3] = [
+    const ALL: [Tab; 4] = [Tab::Play, Tab::Picture, Tab::Display, Tab::Controls];
+    const NAMES: [(Tab, &str); 4] = [
         (Tab::Play, "Play"),
         (Tab::Picture, "Picture"),
+        (Tab::Display, "Display"),
         (Tab::Controls, "Controls"),
     ];
 
@@ -89,7 +91,9 @@ pub fn check_game(folder: &str) -> Check {
             Ok(edition) => Check::Found(edition.name),
             Err(digest) => Check::Problem(edition::refusal(&digest)),
         },
-        Err(error) => Check::Problem(format!("Can't read DiRT.exe ({error}).")),
+        Err(error) => Check::Problem(format!(
+            "Can't read DiRT.exe ({error}). Check that your account can open files in this folder."
+        )),
     }
 }
 
@@ -190,6 +194,7 @@ impl Window {
             widgets::tab_body(ui, self.tab, |ui| match self.tab {
                 Tab::Play => self.play_tab(ui),
                 Tab::Picture => self.picture_tab(ui),
+                Tab::Display => self.display_tab(ui),
                 Tab::Controls => self.controls_tab(ui),
             });
         });
@@ -227,6 +232,9 @@ impl Window {
             })
             .clone();
         widgets::hero_image(ui.painter(), rect, portrait.as_ref(), Crop::Start, BLUE);
+        // The caption sits on a solid backing (no small text over a photo).
+        let backing = Rect::from_min_max(egui::pos2(rect.left(), rect.bottom() - 84.0), rect.max);
+        ui.painter().rect_filled(backing, 0.0, BLUE);
         widgets::photo_caption(
             ui,
             rect,
@@ -258,7 +266,7 @@ impl Window {
         let hint = if self.host.linux {
             "The folder with DiRT.exe, e.g. Z:\\home\\you\\Games\\DiRT"
         } else {
-            "The folder with your installed DiRT.exe"
+            "The folder with DiRT.exe, e.g. C:\\Games\\DiRT"
         };
         let pick = &self.host.pick_folder;
         if widgets::folder_field(ui, &mut self.form.game, game.label, hint, pick) {
@@ -342,8 +350,7 @@ impl Window {
         self.resolutions = form::resolutions(self.host.screen, self.form.picture.resolution);
     }
 
-    /// Picture: the screen size and shape, then detail, the display mode
-    /// and vsync, then the Linux helper's scaler.
+    /// Picture: the screen size and shape, then the detail preset.
     fn picture_tab(&mut self, ui: &mut egui::Ui) {
         let screen = self.host.screen;
         let mut picture = self.form.picture;
@@ -376,6 +383,15 @@ impl Window {
         {
             picture.quality = quality;
         }
+        self.form.edit_picture(picture, screen);
+    }
+
+    /// Display: how the picture reaches the screen (fullscreen, vsync)
+    /// and, under the Linux helper, gamescope's scaler.
+    fn display_tab(&mut self, ui: &mut egui::Ui) {
+        let screen = self.host.screen;
+        let mut picture = self.form.picture;
+        widgets::heading(ui, "Screen mode");
         if let Some(text) = table_row(ui, "fullscreen", cfg::on_off(picture.fullscreen), None) {
             picture.fullscreen = text == cfg::on_off(true);
         }

@@ -25,8 +25,7 @@
 # Values: WIDTHxHEIGHT or auto.
 #resolution = 3840x2160
 
-# The picture's shape. Auto follows the resolution; pick another to match a
-# screen the resolution doesn't describe.
+# The picture's shape. Auto follows the resolution.
 # Values: auto, 4:3, 5:4, 16:9 or 16:10.
 #aspect =
 

@@ -7,7 +7,7 @@ The launcher makes a private runtime copy and leaves your installed game
 folder unchanged. There are no third-party patchers, compatibility modes,
 controller translators, winetricks commands, or manual XML edits.
 
-![DiRTLauncher with an official v1.22 game detected](docs/images/launcher.png)
+![DiRTLauncher with an official v1.22 game detected](docs/images/launcher-play.jpg)
 
 [![DiRT gameplay at 4K with the launcher](https://new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/dirt-launcher/showcase-poster.jpg)](https://new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/dirt-launcher/showcase-h264.mp4)
 

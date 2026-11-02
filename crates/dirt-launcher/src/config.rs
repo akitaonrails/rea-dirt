@@ -274,7 +274,7 @@ pub const OPTIONS: &[OptionSpec] = &[
         "aspect",
         Kind::Choice(ASPECTS),
         "Aspect",
-        "The picture's shape. Auto follows the resolution; pick another to match a screen the resolution doesn't describe.",
+        "The picture's shape. Auto follows the resolution.",
     ),
     OptionSpec::new(
         "quality",
