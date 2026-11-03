@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Changed
+
+- Updated rea-launcher-sdk to v0.4.1.
+- Starting the launcher again while the game runs is refused with exit
+  code 5 (was 0 from `dirt-play --play`), so scripts can tell nothing
+  started. The message is the family's: quit the game first.
+- `dirt-play`'s settings window (`--settings --linux`) and
+  `--check --linux` no longer pop up a dialog of their own: the window
+  shows its messages, and the helper reads the output and exit code. The
+  game run under `dirt-play`, the AppImage and Proton still shows its
+  errors in a dialog.
+- `dirt-play` sizes gamescope for `--look` and `look =` with the shared
+  helper code; the sizes are the same as before.
+
+### Fixed
+
+- On a fresh Wine prefix the settings window now opens on the first
+  start. Before, it only drew from the second start on.
+- If the launcher was killed while DiRT was running, the next Play used
+  to start a second game over the same private copy. Now it says the
+  game is already running and starts nothing.
+- A second start only brings forward the launcher's own window, never
+  an Explorer folder or another program's window with the same title.
+- A Wine DLL override for `d3d9` that you set yourself is never removed,
+  even when it matches the launcher's. One written by v0.2.0 stays too
+  (and is listed in `launcher.log`). Under Proton without `dirt-play` it
+  then falls back to Wine's own `d3d9`, as before.
+
 ## v0.2.0 — 2026-11-02
 
 ### Changed
