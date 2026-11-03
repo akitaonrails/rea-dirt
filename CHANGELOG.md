@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.3.0 - 2026-11-03
+
 ### Changed
 
 - Updated rea-launcher-sdk to v0.4.1.
