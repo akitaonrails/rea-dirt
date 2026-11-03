@@ -1,6 +1,7 @@
 //! Under Wine (sdk/scripts/wine-test): the launch plan's per-exe DLL
 //! override for DXVK's d3d9 reaches the registry Wine's loader reads, and
-//! taking it back leaves a player's own value alone.
+//! taking it back leaves a player's own value alone, and a value written
+//! by v0.2.0 (SDK v0.3.3, no ownership record) too.
 #![cfg(windows)]
 
 use std::process::Command;
@@ -34,12 +35,15 @@ fn the_d3d9_override_round_trips_in_the_registry() {
         runtime: r"C:\DiRT".into(),
         ..Env::default()
     };
-    // The wine-test prefix outlives a run: start from no value (an earlier
-    // run ends with the player's value in place).
+    // The wine-test prefix outlives a run: start from no value and no
+    // record (an earlier run ends with the player's value in place).
     let key = format!(r"HKCU\Software\Wine\AppDefaults\{EXE}\DllOverrides");
-    let _ = Command::new("reg")
-        .args(["delete", &key, "/v", "d3d9", "/f"])
-        .output();
+    let record = format!(r"HKCU\{}", wine::owned_key(EXE));
+    for k in [&key, &record] {
+        let _ = Command::new("reg")
+            .args(["delete", k, "/v", "d3d9", "/f"])
+            .output();
+    }
     let plan = plan::plan(&Default::default(), &env);
     let ours: Vec<(&str, DllMode)> = plan
         .app_dlls
@@ -67,7 +71,25 @@ fn the_d3d9_override_round_trips_in_the_registry() {
             .is_empty()
     );
     assert_eq!(query("d3d9").as_deref(), Some("builtin"));
-    let _ = Command::new("reg")
-        .args(["delete", &key, "/v", "d3d9", "/f"])
-        .output();
+    // v0.2.0 wrote our value without a record: it is reported as matching,
+    // kept on Linux and kept when taken back (Proton); with the copy's
+    // d3d9.dll gone, native,builtin falls back to Wine's own.
+    Command::new("reg")
+        .args(["add", &key, "/v", "d3d9", "/d", "native,builtin", "/f"])
+        .status()
+        .unwrap();
+    let applied = wine::app_dll_overrides(EXE, &ours).unwrap();
+    assert!(applied.written.is_empty() && applied.ours.is_empty());
+    assert_eq!(applied.matching, ["d3d9"]);
+    assert!(
+        wine::remove_app_dll_overrides(EXE, &ours)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(query("d3d9").as_deref(), Some("native,builtin"));
+    for k in [&key, &record] {
+        let _ = Command::new("reg")
+            .args(["delete", k, "/v", "d3d9", "/f"])
+            .output();
+    }
 }

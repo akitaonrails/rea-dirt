@@ -149,7 +149,10 @@ mod app {
 
     /// Writes the plan's per-exe DLL overrides under Wine
     /// (`HKCU\Software\Wine\AppDefaults\DiRT.exe\DllOverrides`) and takes
-    /// back the ones no longer wanted; failures are logged, not fatal.
+    /// back the ones no longer wanted; failures are logged, not fatal. The
+    /// SDK records what it wrote and takes back only those: a value v0.2.0
+    /// wrote has no record and stays (it falls back to Wine's builtin
+    /// when the copy has no d3d9.dll).
     fn apply_app_dll_overrides(plan: &plan::Plan) {
         use rea_launcher_win32::wine::{self as winereg, DllMode};
         fn modes(dlls: &[String]) -> Vec<(&str, DllMode)> {
@@ -172,10 +175,13 @@ mod app {
         }
         match winereg::app_dll_overrides(edition::EXE, &on) {
             Ok(applied) => log_line(&format!(
-                "wine: per-exe DLL overrides for {} (native,builtin): written {:?}, already ours {:?}, the player's kept {:?}",
+                "wine: per-exe DLL overrides for {} (native,builtin): written {:?}, already ours {:?}, \
+                 same value but not recorded as ours (v0.2.0's or the player's, kept) {:?}, \
+                 the player's kept {:?}",
                 edition::EXE,
                 applied.written,
                 applied.ours,
+                applied.matching,
                 applied.player
             )),
             Err(error) => log_line(&format!("warning: {error}")),
