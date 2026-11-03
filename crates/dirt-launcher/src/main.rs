@@ -200,7 +200,7 @@ mod app {
         };
         // One launcher at a time, held until the game exits: a second
         // start brings the window forward or refuses to play.
-        let _instance = if instance::needs_instance(&cli.switches) {
+        let mut guard = if instance::needs_instance(&cli.switches) {
             match rea_launcher_win32::instance::single(instance::NAME) {
                 Ok(guard) => Some(guard),
                 Err(running) => {
@@ -237,13 +237,25 @@ mod app {
         let wants_window =
             settings_only || (!cli.options_given() && !no_window && !check_only && !setup_only);
         if wants_window {
-            if wine::is_wine() {
-                match gpu::prefer_glx() {
-                    Ok(true) => log_line("Wine settings window: OpenGL through GLX (UseEGL=N)"),
-                    Ok(false) => {}
-                    Err(error) => log_line(&format!("warning: {error}")),
+            // Under Wine the window draws through GLX; on a fresh prefix
+            // the setting only takes effect in a new process, so the
+            // launcher runs itself again once (it hands that run the
+            // instance) and ends with its exit code.
+            guard = match gpu::prefer_glx_or_restart(guard.take()) {
+                gpu::Glx::Restarted { exit_code } => {
+                    log_line(&format!(
+                        "Wine settings window: OpenGL through GLX (UseEGL=N); \
+                         ran again for it, exit {exit_code}"
+                    ));
+                    return Ok(exit_code);
                 }
-            }
+                gpu::Glx::Ready { instance, warning } => {
+                    if let Some(warning) = warning {
+                        log_line(&format!("warning: {warning}"));
+                    }
+                    instance
+                }
+            };
             let saved = cfg::read_file(&settings_path).ok().flatten();
             match ui::show(&settings_path, saved.as_deref(), linux) {
                 Ok(ui::Outcome::Play) => {
@@ -442,6 +454,8 @@ mod app {
         xinput::stop_rumble();
         let code = status.code().unwrap_or(1) as u32;
         log_line(&format!("game exited with {code}"));
+        // Held until here: a second start while the game ran was refused.
+        drop(guard);
         Ok(code)
     }
 }
