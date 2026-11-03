@@ -39,7 +39,7 @@ mod app {
     use dirt_launcher::{edition, hardware, instance, runtime};
     use rea_launcher::log::Log;
     use rea_launcher::{cfg, fsx, identify, paths};
-    use rea_launcher_win32::report::{self, Mode};
+    use rea_launcher_win32::report::{self, Run};
     use rea_launcher_win32::{display as screen, gpu, wine, xinput};
 
     use crate::ui;
@@ -57,49 +57,34 @@ mod app {
         Log::new(home().join("launcher.log")).line(line);
     }
 
-    /// Whether a person may be watching (`dirt_launcher::audience`: under
-    /// Wine always, else not with `--no-window`).
-    fn interactive() -> bool {
+    /// This run's kind from its flags (`tests/audience.rs` checks the
+    /// helper's command lines). Every message goes through the SDK's
+    /// `report::audience`: under Wine a game run shows a dialog, the Linux
+    /// helper's window run and `--check --linux` show none.
+    fn this_run() -> Run {
         let args: Vec<String> = std::env::args().skip(1).collect();
-        dirt_launcher::audience::interactive(&args, wine::is_wine())
+        Run::from_args(&args, &[])
     }
 
     /// An error the launcher stops on: a dialog when a person may be
-    /// watching, and stdout, which `dirt-play` and Proton keep in a log
-    /// (SDK `report`, so it reaches the player under Wine too).
+    /// watching, and stdout, which `dirt-play` and Proton keep in a log.
     pub fn fatal(text: &str) {
-        report::fatal(
-            TITLE,
-            text,
-            Mode::Play {
-                interactive: interactive(),
-            },
-        );
+        report::fatal(TITLE, text, report::audience(this_run()).mode());
     }
 
     /// A message while preparing to play (another launcher is running).
     fn play_note(text: &str) {
-        report::note(
-            TITLE,
-            text,
-            Mode::Play {
-                interactive: interactive(),
-            },
-            true,
-        );
+        report::note(TITLE, text, report::audience(this_run()).mode(), true);
     }
 
-    /// Output of a command (`--help`, `--check`): the terminal, or a
-    /// dialog when nobody sees it.
+    /// Output of a command (`--help`, `--check`) or an action (`--setup`):
+    /// the terminal, or a dialog when nobody sees it.
     fn command(text: &str) {
-        report::note(
-            TITLE,
-            text,
-            Mode::Command {
-                interactive: interactive(),
-            },
-            false,
-        );
+        let run = Run {
+            command: true,
+            ..this_run()
+        };
+        report::note(TITLE, text, report::audience(run).mode(), false);
     }
 
     fn settings_path() -> PathBuf {

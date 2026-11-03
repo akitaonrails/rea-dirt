@@ -22,4 +22,6 @@ rea-launcher-ui.workspace = true
 # The palette test and the headless window tests (egui_kittest) run on the
 # host and under sdk/scripts/wine-test.
 [dev-dependencies]
+# tests/audience.rs: the SDK's pure report::Audience rule, on the host too.
+rea-launcher-win32.workspace = true
 rea-launcher-ui = { workspace = true, features = ["testing"] }
