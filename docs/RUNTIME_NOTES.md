@@ -142,3 +142,23 @@ Notes:
   a minute. From `nav1` on, WirePlumber's device monitors were switched off
   in the test HOME (`rea_null` the only sink).
 - Not checked: a race, sound itself, native Windows, Proton, a Steam Deck.
+
+## 2026-11-02: rea-launcher-sdk v0.4.1, pending real-game checks
+
+Verified without the game (host, `sdk/scripts/wine-test`, a throwaway
+prefix under `.work/`): the SDK audience for the helper's command lines;
+the second start through `Window::Own`; `find_running` finds a stand-in
+`DiRT.exe` in a private copy and not one from another folder; a d3d9
+override v0.2.0 wrote (no record) is kept; a fresh prefix's first
+`--settings --linux` start runs the launcher again for GLX and draws the
+window (Xvfb).
+
+Pending in the real game, headless as above:
+
+- Each look reaches the game through `REA_LOOK_SIZES` (gamescope size as
+  before).
+- A Play-time error under `dirt-play` shows a dialog.
+- A second start while the game runs: refused, exit 5 (was 0 from
+  `dirt-play --play`); a launcher killed while its game runs: the next
+  Play is refused while `DiRT.exe` still runs from the copy.
+- Every quit path leaves nothing behind (as in the v0.3.3 pass).
