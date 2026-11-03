@@ -11,7 +11,6 @@
 //! launcher's own default, and the patch lists only the patched bytes.
 
 use std::fmt::Write;
-use std::path::PathBuf;
 
 use dirt_launcher::config::{self, Settings};
 use dirt_launcher::form::{Form, Look};
@@ -21,21 +20,13 @@ use rea_launcher::patch::At;
 
 const RUNTIME: &str = r"C:\users\steamuser\AppData\Local\DiRTLauncher\DiRT";
 
+/// Compares with `tests/snapshots/<name>.txt` through the SDK helper, which
+/// stores the crate version as `<version>` and names the first differing
+/// line. `DIRT_UPDATE_SNAPSHOTS=1` (or `REA_UPDATE_SNAPSHOTS=1`) writes them.
 fn snapshot(name: &str, actual: &str) {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/snapshots")
-        .join(format!("{name}.txt"));
-    if std::env::var_os("DIRT_UPDATE_SNAPSHOTS").is_some() {
-        std::fs::write(&path, actual).unwrap();
-        return;
-    }
-    let expected = std::fs::read_to_string(&path)
-        .unwrap_or_else(|_| panic!("no snapshot {}; see the module docs", path.display()))
-        .replace("\r\n", "\n");
-    assert!(
-        expected == actual,
-        "snapshot {name} changed; review the diff:\n--- expected\n{expected}\n--- actual\n{actual}"
-    );
+    rea_launcher::snapshots!()
+        .update_var("DIRT_UPDATE_SNAPSHOTS")
+        .assert(&format!("{name}.txt"), actual);
 }
 
 fn linux() -> Env {
@@ -113,11 +104,7 @@ fn render(title: &str, settings: &Settings, env: &Env) -> String {
 
 #[test]
 fn help_and_template() {
-    // The version changes every release; the snapshot keeps a placeholder.
-    snapshot(
-        "help",
-        &config::usage().replace(env!("CARGO_PKG_VERSION"), "<version>"),
-    );
+    snapshot("help", &config::usage());
     snapshot("launcher-cfg-template", &config::template());
 }
 
