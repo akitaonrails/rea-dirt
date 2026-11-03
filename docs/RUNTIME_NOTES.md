@@ -143,7 +143,7 @@ Notes:
   in the test HOME (`rea_null` the only sink).
 - Not checked: a race, sound itself, native Windows, Proton, a Steam Deck.
 
-## 2026-11-02: rea-launcher-sdk v0.4.1, pending real-game checks
+## 2026-11-03: rea-launcher-sdk v0.4.1 migration
 
 Verified without the game (host, `sdk/scripts/wine-test`, a throwaway
 prefix under `.work/`): the SDK audience for the helper's command lines;
@@ -153,12 +153,36 @@ override v0.2.0 wrote (no record) is kept; a fresh prefix's first
 `--settings --linux` start runs the launcher again for GLX and draws the
 window (Xvfb).
 
-Pending in the real game, headless as above:
+Real game, 2026-11-03, headless: the owner's v1.22 install (read only),
+`DiRTLauncher.exe` and the zip layout built at this branch's HEAD (DXVK
+3.1.1 from its pin), a fresh throwaway prefix, HOME and XDG dirs under
+`.work/realgame/`, every run inside the `gaming` box under `env -i`, a
+finite `timeout`, `gamescope --backend headless`, a private PipeWire with
+one null sink and WirePlumber's device monitors off. Processes were found
+by name (`ps -o pid,comm`) and our recorded sessions, confirmed as ours by
+our prefix (`grep -qx`, nothing printed); no command line was printed.
+Logs: `.work/realgame/logs/v041-*/`.
 
-- Each look reaches the game through `REA_LOOK_SIZES` (gamescope size as
-  before).
-- A Play-time error under `dirt-play` shows a dialog.
-- A second start while the game runs: refused, exit 5 (was 0 from
-  `dirt-play --play`); a launcher killed while its game runs: the next
-  Play is refused while `DiRT.exe` still runs from the copy.
-- Every quit path leaves nothing behind (as in the v0.3.3 pass).
+| Check | Result | Evidence |
+|---|---|---|
+| First setup | **VERIFIED**: 14,713 files (11 GB) from NFS in 7 min; LAA build recognised | `v041-setup.out` |
+| Original 2007 look | **VERIFIED**: gamescope 1280x720 (`REA_LOOK_SIZES`), XML `1280x720 16:9`, `medium` | `v041-orig/` |
+| Steam Deck look | **VERIFIED**: gamescope 1280x800, XML `1280x800 16:10`, `high` | `v041-deck/` |
+| Modern look | **VERIFIED**: gamescope 1920x1080 (no screen headless), XML `1920x1080 16:9`, `ultra` | `v041-modern/` |
+| `--look original` over a Modern `launcher.cfg` | **VERIFIED**: gamescope and XML both 1280x720 `medium`, for that run only | `v041-lookflag/` |
+| Play-time error under `dirt-play` | **VERIFIED**: a missing game folder shows an error dialog in gamescope (screenshot); its windows go when OK is pressed | `v041-err/dialog.jpg` |
+| Second start while the game runs | **VERIFIED**: `wine DiRTLauncher.exe --no-window --linux` shows "already running" and starts nothing; `dirt-play --play` exits **5** ("already running"); one `DiRT.exe` throughout | `v041-second/` |
+| Launcher killed while its game runs | **VERIFIED**: the game keeps running; the next start logs "DiRT.exe still runs from the private copy" and refuses with the dialog; still one `DiRT.exe` | `v041-killed3/refused.jpg` |
+| Per-exe d3d9 override | **VERIFIED**: written and recorded on the first run (`written ["d3d9"]`), `already ours` after | `v041-*/launcher.log` |
+| The game's own Quit | **VERIFIED**: exit 0, game gone 7.0 s after the key sequence began | `v041-own/` |
+| `dirt-play stop` | **VERIFIED**: game gone in 0.42 s | `v041-orig/`, `v041-second/` |
+| `WM_CLOSE` | **VERIFIED**: game gone in 6.2 s, helper exit 0 | `v041-deck/` |
+| `WM_SYSCOMMAND SC_CLOSE` | **VERIFIED**: 6.2 s | `v041-modern/` |
+| Alt+F4 (X key presses) | **VERIFIED**: 5.8 s | `v041-lookflag/` |
+| gamescope closed | **VERIFIED**: game gone in 0.41 s | `v041-killgs/` |
+| SIGINT / SIGTERM to `dirt-play` (`DIRT_WAIT=1`) | **VERIFIED**: game gone in 0.36 / 0.37 s, helper exit 143 | `v041-sigint-wait/`, `v041-sigterm-wait/` |
+| Process table after every run | **VERIFIED** clean: nothing of ours left to signal after any run | `procs-kill.txt` per run |
+
+Not checked: a race, sound itself, native Windows, Proton, a Steam Deck.
+The fresh prefix had no profile, so the first own-Quit attempt landed in
+the new-profile screens; it was rerun after a profile was created.
