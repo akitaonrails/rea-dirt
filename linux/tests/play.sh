@@ -115,6 +115,12 @@ contains "--look=original too" "$(size --look=original)" "gamescope -W 1280 -H 7
 contains "--look modern: the screen" "$(SCREEN=2560x1600 size --look modern)" "gamescope -W 2560 -H 1600"
 contains "--resolution wins over --look" "$(size --look steam-deck --resolution 1920x1200)" "gamescope -W 1920 -H 1200"
 contains "--resolution auto: the screen" "$(SCREEN=2560x1440 size --resolution auto)" "gamescope -W 2560 -H 1440"
+# DiRT reads `auto` as the screen, never the look (config.rs
+# resolve_resolution), also when a look is named next to it.
+contains "--resolution auto wins over --look" "$(SCREEN=2560x1440 size --resolution auto --look steam-deck)" "gamescope -W 2560 -H 1440"
+printf 'look = steam-deck\nresolution = auto\n' > "$cfg"
+contains "the file's resolution auto wins over its look" "$(SCREEN=3440x1440 size)" "gamescope -W 3440 -H 1440"
+contains "--look still wins over the file's auto" "$(SCREEN=3440x1440 size --look original)" "gamescope -W 1280 -H 720"
 contains "the flags still reach the launcher" "$(size --look steam-deck)" "--no-window --linux --look steam-deck"
 rm -f "$cfg"
 
