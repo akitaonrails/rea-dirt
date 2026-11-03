@@ -39,8 +39,9 @@ mod app {
     use dirt_launcher::{edition, hardware, instance, runtime};
     use rea_launcher::log::Log;
     use rea_launcher::{cfg, fsx, identify, paths};
+    use rea_launcher_win32::instance::SecondStart;
     use rea_launcher_win32::report::{self, Run};
-    use rea_launcher_win32::{display as screen, gpu, wine, xinput};
+    use rea_launcher_win32::{display as screen, gpu, process, wine, xinput};
 
     use crate::ui;
 
@@ -203,22 +204,19 @@ mod app {
             match rea_launcher_win32::instance::single(instance::NAME) {
                 Ok(guard) => Some(guard),
                 Err(running) => {
-                    let window =
-                        rea_launcher_win32::instance::Window::Title(instance::WINDOW_TITLE);
                     let action = instance::is_action(&cli.switches);
-                    let second = instance::Second::of(
+                    let second = running.second_start(
                         action,
-                        || running.is_window_found(window),
-                        || running.bring_to_front(window),
+                        rea_launcher_win32::instance::Window::Own(instance::WINDOW_TITLE),
                     );
-                    log_line(&format!("another launcher is running: {second:?}"));
-                    match second.message() {
+                    log_line(second.log_line());
+                    match second.message(instance::GAME) {
                         // An action's outcome goes where its output goes.
-                        Some(message) if action => command(message),
-                        Some(message) => play_note(message),
+                        Some(message) if action => command(&message),
+                        Some(message) => play_note(&message),
                         None => {}
                     }
-                    return Ok(second.exit_code());
+                    return Ok(second.exit_code() as u32);
                 }
             }
         } else {
@@ -307,6 +305,27 @@ mod app {
             .clone()
             .unwrap_or_else(|| home().join("DiRT"));
         paths::check_separate(&game, &runtime_dir)?;
+        // A launcher killed while its game ran released the instance, but
+        // the game may still run from the private copy: never sync, patch
+        // or start a second one over it.
+        let runtime_exe = runtime_dir.join(edition::EXE);
+        let still_running = process::find_running(&runtime_exe);
+        if !still_running.is_empty() {
+            log_line(&format!(
+                "{} still runs from the private copy (process {still_running:?}): {}",
+                edition::EXE,
+                SecondStart::Busy.log_line()
+            ));
+            let message = SecondStart::Busy
+                .message(instance::GAME)
+                .unwrap_or_default();
+            if setup_only {
+                command(&message);
+            } else {
+                play_note(&message);
+            }
+            return Ok(SecondStart::Busy.exit_code() as u32);
+        }
         if !linux {
             // Back on native Windows after a Linux run: drop our DXVK first,
             // so the sync brings the player's own d3d9.dll (if any) back.
@@ -367,7 +386,6 @@ mod app {
 
         // Patches: from the game folder's pristine bytes into the private
         // copy, every launch, each set's result checked by SHA-256.
-        let runtime_exe = runtime_dir.join(edition::EXE);
         let patched = rea_launcher::patch::apply_sets(&exe_bytes, &plan.patches)
             .map_err(|error| format!("{}: Large Address Aware refused: {error}", edition::EXE))?;
         if fs::read(&runtime_exe).ok().as_deref() != Some(&patched[..]) {

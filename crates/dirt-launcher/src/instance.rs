@@ -2,27 +2,21 @@
 //! instance"). The launcher holds `rea_launcher_win32::instance::single`
 //! for its whole run, including while it waits for the game, so a second
 //! start can neither open a second window nor start the game again from
-//! the same private copy. This module is the host-testable part: which
-//! runs take the instance and what a second start does.
+//! the same private copy; what a second start does is the SDK's
+//! `AlreadyRunning::second_start(action, Window::Own(WINDOW_TITLE))`, and
+//! Play is refused while `process::find_running` finds the private copy's
+//! `DiRT.exe`. This module is the host-testable part: which runs take the
+//! instance and which are actions.
 
 /// The instance name (`Local\rea-launcher-rea-dirt`).
 pub const NAME: &str = "rea-dirt";
 
-/// The settings window's title, which a second start brings forward.
+/// The settings window's title, which a second start brings forward. The
+/// game's own window is `DiRT` (class `NeonClass_41`).
 pub const WINDOW_TITLE: &str = "Colin McRae: DiRT";
 
-/// Exit code of a second start that found no window to bring forward
-/// (the game, or a run without a window, is in progress).
-pub const ALREADY_RUNNING: u32 = 5;
-
-/// What a second start says when there is no window to bring forward.
-pub const BUSY: &str = "Colin McRae: DiRT is already running from this launcher. \
-     Quit the game first, then start the launcher again.";
-
-/// What a second `--setup` says when the settings window is open: the
-/// window would write the same files when Play is pressed.
-pub const WINDOW_OPEN: &str = "The launcher window is open; press Play there, or close it \
-     and run --setup again.";
+/// The game's name in the SDK's "already running" messages.
+pub const GAME: &str = "Colin McRae: DiRT";
 
 /// Whether a run with these switches is an action that does its work
 /// without the window (SDK v0.3.2 "action flags"): a second start must
@@ -39,64 +33,10 @@ pub fn needs_instance(switches: &[String]) -> bool {
     !switches.iter().any(|switch| switch == "--check")
 }
 
-/// What a second start does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Second {
-    /// The running launcher's window came forward; exit quietly (0).
-    Focused,
-    /// No window (the game is running): say so and exit with
-    /// [`ALREADY_RUNNING`].
-    Busy,
-    /// An action flag found the settings window open: say to use the
-    /// window, leave it where it is, exit with [`ALREADY_RUNNING`].
-    WindowOpen,
-}
-
-impl Second {
-    /// `bring_to_front` is the SDK's `AlreadyRunning::bring_to_front` for
-    /// [`WINDOW_TITLE`] (a fake in tests).
-    /// For an action flag (`action`), `window_found` is the SDK's
-    /// `AlreadyRunning::is_window_found` (a fake in tests): the window is
-    /// never brought forward and the run always fails.
-    pub fn of(
-        action: bool,
-        window_found: impl FnOnce() -> bool,
-        bring_to_front: impl FnOnce() -> bool,
-    ) -> Second {
-        if action {
-            if window_found() {
-                Second::WindowOpen
-            } else {
-                Second::Busy
-            }
-        } else if bring_to_front() {
-            Second::Focused
-        } else {
-            Second::Busy
-        }
-    }
-
-    pub fn exit_code(self) -> u32 {
-        match self {
-            Second::Focused => 0,
-            Second::Busy | Second::WindowOpen => ALREADY_RUNNING,
-        }
-    }
-
-    /// The message for the player, if any.
-    pub fn message(self) -> Option<&'static str> {
-        match self {
-            Second::Focused => None,
-            Second::Busy => Some(BUSY),
-            Second::WindowOpen => Some(WINDOW_OPEN),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::Cell;
+    use rea_launcher_win32::instance::{ALREADY_RUNNING, SecondStart};
 
     fn switches(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()
@@ -113,42 +53,42 @@ mod tests {
     }
 
     #[test]
+    fn only_setup_is_an_action() {
+        assert!(is_action(&switches(&["--setup"])));
+        assert!(!is_action(&switches(&["--no-window"])));
+        assert!(!is_action(&switches(&["--settings"])));
+        assert!(!is_action(&[]));
+    }
+
+    #[test]
     fn a_second_start_brings_the_window_forward_or_refuses_to_play() {
-        // The first launcher shows its window: it comes forward, no message.
-        let asked = Cell::new(0);
-        let second = Second::of(
-            false,
-            || unreachable!(),
-            || {
-                asked.set(asked.get() + 1);
-                true
-            },
-        );
-        assert_eq!(asked.get(), 1);
-        assert_eq!(second, Second::Focused);
-        assert_eq!((second.exit_code(), second.message()), (0, None));
-        // The first launcher is waiting for the game: Play is refused.
-        let second = Second::of(false, || unreachable!(), || false);
-        assert_eq!(second, Second::Busy);
-        assert_eq!(second.exit_code(), ALREADY_RUNNING);
-        assert!(second.message().unwrap().contains("Quit the game first"));
+        // The first launcher shows its window: it comes forward, exit 0.
+        let second = SecondStart::decide(false, || unreachable!(), || true);
+        assert_eq!((second.exit_code(), second.message(GAME)), (0, None));
+        // The first launcher is waiting for the game (or the private copy's
+        // DiRT.exe still runs): refused with 5, in the player's words.
+        let second = SecondStart::decide(false, || unreachable!(), || false);
+        assert_eq!(second, SecondStart::Busy);
+        assert_eq!(second.exit_code(), 5);
+        let message = second.message(GAME).unwrap();
+        assert!(message.starts_with("Colin McRae: DiRT is already running"));
+        assert!(message.contains("Quit the game first"));
     }
 
     #[test]
     fn setup_with_the_window_open_says_to_use_it_and_fails() {
-        let action = switches(&["--setup"]);
-        assert!(is_action(&action));
-        assert!(!is_action(&switches(&["--no-window"])));
-        assert!(!is_action(&[]));
-        // The window is open: it is not brought forward, the run fails.
-        let second = Second::of(is_action(&action), || true, || unreachable!());
-        assert_eq!(second, Second::WindowOpen);
+        let action = is_action(&switches(&["--setup"]));
+        let second = SecondStart::decide(action, || true, || unreachable!());
+        assert_eq!(second, SecondStart::WindowOpen);
         assert_eq!(second.exit_code(), ALREADY_RUNNING);
-        assert!(second.message().unwrap().contains("press Play there"));
-        // The game (or another action) holds the instance: busy, failed.
-        let second = Second::of(true, || false, || unreachable!());
-        assert_eq!(second, Second::Busy);
-        assert_ne!(second.exit_code(), 0);
+        assert!(
+            second
+                .message(GAME)
+                .unwrap()
+                .contains("launcher window is open")
+        );
+        let second = SecondStart::decide(action, || false, || unreachable!());
+        assert_eq!(second, SecondStart::Busy);
     }
 
     #[test]
