@@ -5,8 +5,8 @@
 //! the same private copy; what a second start does is the SDK's
 //! `AlreadyRunning::second_start(action, Window::Own(WINDOW_TITLE))`, and
 //! Play is refused while `process::find_running` finds the private copy's
-//! `DiRT.exe`. This module is the host-testable part: which runs take the
-//! instance and which are actions.
+//! `DiRT.exe`. This module is the host-testable part: the names and
+//! which runs are actions.
 
 /// The instance name (`Local\rea-launcher-rea-dirt`).
 pub const NAME: &str = "rea-dirt";
@@ -18,46 +18,35 @@ pub const WINDOW_TITLE: &str = "Colin McRae: DiRT";
 /// The game's name in the SDK's "already running" messages.
 pub const GAME: &str = "Colin McRae: DiRT";
 
-/// Whether a run with these switches is an action that does its work
-/// without the window (SDK v0.3.2 "action flags"): a second start must
-/// not bring the window forward and exit 0 as if the work were done.
-pub fn is_action(switches: &[String]) -> bool {
-    switches.iter().any(|switch| switch == "--setup")
-}
-
-/// Whether a run with these switches takes the instance. `--check` only
-/// reads the game folder, so it may run next to a game; every other run
-/// (window, play, `--setup`) writes the private copy or the launcher's
-/// own files.
-pub fn needs_instance(switches: &[String]) -> bool {
-    !switches.iter().any(|switch| switch == "--check")
-}
+/// The launcher's own action flags, on top of the SDK's
+/// `instance::ACTION_FLAGS` (`--check`, `--setup`) and `--download-*`:
+/// none. Every run that gets past its command line takes the instance,
+/// `--check` included (SDK v0.4.2), so `main` decides a second start with
+/// `rea_launcher_win32::instance::is_action(&cli.switches, OWN_ACTIONS)`.
+pub const OWN_ACTIONS: &[&str] = &[];
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rea_launcher_win32::instance::{ALREADY_RUNNING, SecondStart};
+    use rea_launcher_win32::instance::{ALREADY_RUNNING, SecondStart, is_action};
 
     fn switches(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()
     }
 
-    #[test]
-    fn every_run_but_check_takes_the_instance() {
-        assert!(needs_instance(&[]));
-        assert!(needs_instance(&switches(&["--no-window"])));
-        assert!(needs_instance(&switches(&["--settings"])));
-        assert!(needs_instance(&switches(&["--setup"])));
-        assert!(needs_instance(&switches(&["--linux", "--no-window"])));
-        assert!(!needs_instance(&switches(&["--check"])));
+    fn action(list: &[&str]) -> bool {
+        is_action(&switches(list), OWN_ACTIONS)
     }
 
     #[test]
-    fn only_setup_is_an_action() {
-        assert!(is_action(&switches(&["--setup"])));
-        assert!(!is_action(&switches(&["--no-window"])));
-        assert!(!is_action(&switches(&["--settings"])));
-        assert!(!is_action(&[]));
+    fn check_and_setup_are_actions_a_play_or_window_run_is_not() {
+        assert!(action(&["--check"]));
+        assert!(action(&["--setup"]));
+        assert!(action(&["--check", "--linux"]));
+        assert!(!action(&["--no-window"]));
+        assert!(!action(&["--no-window", "--linux"]));
+        assert!(!action(&["--settings"]));
+        assert!(!action(&[]));
     }
 
     #[test]
@@ -76,24 +65,34 @@ mod tests {
     }
 
     #[test]
-    fn setup_with_the_window_open_says_to_use_it_and_fails() {
-        let action = is_action(&switches(&["--setup"]));
-        let second = SecondStart::decide(action, || true, || unreachable!());
-        assert_eq!(second, SecondStart::WindowOpen);
-        assert_eq!(second.exit_code(), ALREADY_RUNNING);
-        assert!(
-            second
-                .message(GAME)
-                .unwrap()
-                .contains("launcher window is open")
-        );
-        let second = SecondStart::decide(action, || false, || unreachable!());
-        assert_eq!(second, SecondStart::Busy);
+    fn an_action_with_the_window_open_says_to_use_it_and_fails() {
+        // `--check` ran next to the open window and printed its report
+        // before (rea-launcher-sdk#1); now it is refused like `--setup`.
+        for list in [
+            &["--check"][..],
+            &["--setup"],
+            &["--check", "--game", r"C:\DiRT"],
+        ] {
+            let second = SecondStart::decide(action(list), || true, || unreachable!());
+            assert_eq!(second, SecondStart::WindowOpen, "{list:?}");
+            assert_eq!(second.exit_code(), ALREADY_RUNNING);
+            assert!(
+                second
+                    .message(GAME)
+                    .unwrap()
+                    .contains("launcher window is open"),
+                "{list:?}"
+            );
+            // The game runs (no launcher window): refused too.
+            let second = SecondStart::decide(action(list), || false, || unreachable!());
+            assert_eq!(second, SecondStart::Busy, "{list:?}");
+        }
     }
 
     #[test]
     fn the_exit_code_is_not_one_the_launcher_already_uses() {
-        // 1 error/--check refusal, 2 not Windows, 3 window closed, 4 no window.
+        // 1 refused, 2 bad command line (or not Windows), 3 window closed,
+        // 4 no window.
         assert!(!(0..=4).contains(&ALREADY_RUNNING));
     }
 }

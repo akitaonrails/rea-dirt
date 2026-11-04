@@ -183,7 +183,8 @@ remembered. The launcher's own switches:
 A bad flag or value is refused with a message naming what it takes and
 the usage, exit 2: printed in a terminal, a dialog only from a shortcut.
 Only one launcher runs at a time: a second start brings the open window
-forward, or says the game is already running (exit 5).
+forward, or says the game is already running (exit 5). `--check` and
+`--setup` while another launcher is open say so and exit 5 too.
 
 ## Where things live
 
