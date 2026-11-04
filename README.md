@@ -61,7 +61,9 @@ Download from the
 
 1. Unzip `DiRTLauncher-<version>.zip` anywhere outside the game folder.
    Keep the `linux` folder next to `DiRTLauncher.exe`.
-2. Run `DiRTLauncher.exe` and follow [First run](#first-run).
+2. Run `DiRTLauncher.exe` and follow [First run](#first-run). The
+   launcher is unsigned, so the first start from a downloaded zip may show
+   "Windows protected your PC": click *More info*, then *Run anyway*.
 
 ### Steam Deck
 
@@ -196,12 +198,14 @@ forward, or says the game is already running (exit 5). `--check` and
 | DiRT's graphics settings | `hardwaresettings\` inside the private copy, and `%USERPROFILE%\Documents\Codemasters\DiRT\` | the same, inside the prefix |
 | Wine prefix | — | `~/.local/share/dirt-launcher/prefix` |
 | `dirt-play`'s logs and lock | — | `~/.config/dirt-launcher` |
+| Registry: the fast GPU for the copy's `DiRT.exe` | `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, value `<private copy>\DiRT.exe` = `GpuPreference=2;` (a per-user Windows setting; `launcher.log` says when it is set) | — |
+| Registry: DXVK's `d3d9` for `DiRT.exe` | — | in the prefix, `HKCU\Software\Wine\AppDefaults\DiRT.exe\DllOverrides`, value `d3d9` = `native,builtin`, and the launcher's record of it, `HKCU\Software\rea-launcher\DllOverrides\DiRT.exe` |
+| Registry: the settings window draws through GLX | — | in the prefix, `HKCU\Software\Wine\X11 Driver`, value `UseEGL` = `N` (only when it was unset) |
 
 A `launcher.cfg` next to `DiRTLauncher.exe` is used instead (a portable
 install). Under Proton everything is inside Steam's prefix for the
-non-Steam game (`steamapps/compatdata/<id>/pfx`). On Windows the launcher
-asks for the fast GPU for the copy's `DiRT.exe` (a per-user Windows
-setting).
+non-Steam game (`steamapps/compatdata/<id>/pfx`), the Wine registry
+values too.
 
 ## Troubleshooting
 
@@ -237,11 +241,14 @@ setting).
    brought into the copy on the first start and never overwritten.
 2. Delete the folder you unzipped the launcher into (or the AppImage).
 3. Windows: delete `%LOCALAPPDATA%\DiRTLauncher` (settings, log, the
-   private copy of the game and its saves).
+   private copy of the game and its saves), and in `regedit` the value
+   named after the private copy's `DiRT.exe` under
+   `HKEY_CURRENT_USER\Software\Microsoft\DirectX\UserGpuPreferences`.
 4. Linux: copy your saves out of the prefix, then delete
    `~/.local/share/dirt-launcher` and `~/.config/dirt-launcher`. With
    Proton, removing the shortcut in Steam offers to delete its prefix,
-   saves included.
+   saves included. The Wine registry values above go with the prefix; in
+   a prefix of your own, delete them with `wine regedit`.
 
 Your game folder was never changed, so there is nothing to undo there.
 
