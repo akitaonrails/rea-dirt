@@ -180,8 +180,9 @@ remembered. The launcher's own switches:
 - `--linux`: started by `dirt-play` or the AppImage (puts DXVK in the copy).
 - `--help`: every option and its values.
 
-A bad flag or value is refused with a message naming what it takes. Only
-one launcher runs at a time: a second start brings the open window
+A bad flag or value is refused with a message naming what it takes and
+the usage, exit 2: printed in a terminal, a dialog only from a shortcut.
+Only one launcher runs at a time: a second start brings the open window
 forward, or says the game is already running (exit 5).
 
 ## Where things live

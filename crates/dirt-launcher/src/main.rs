@@ -32,7 +32,7 @@ mod app {
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
-    use dirt_launcher::config::{self, Settings};
+    use dirt_launcher::config::{self, Settings, Stop};
     use dirt_launcher::display::Fallback;
     use dirt_launcher::plan::{self, Env};
     use dirt_launcher::runtime::DXVK_MARKER;
@@ -194,15 +194,28 @@ mod app {
     pub fn run() -> Result<u32, String> {
         log_line(concat!("DiRTLauncher ", env!("CARGO_PKG_VERSION")));
         let settings_path = settings_path();
-        // Validated up front, so a typo is reported even when the window
-        // opens instead of playing.
-        let cli = match Settings::parse_args(std::env::args().skip(1)) {
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        let cli = match config::read_command_line(args.iter().cloned()) {
             Ok(cli) => cli,
-            Err(message) if message == config::usage() => {
-                command(&message);
+            Err(Stop::Help(usage)) => {
+                command(&usage);
                 return Ok(0);
             }
-            Err(message) => return Err(message),
+            // Reported like a command: the terminal, a dialog only when
+            // nobody sees one; never a play run's modal box that a script
+            // with a typo waits on (rea-launcher-sdk#1).
+            Err(Stop::BadCommandLine(message)) => {
+                log_line(&format!(
+                    "bad command line: {}",
+                    message.lines().next().unwrap_or_default()
+                ));
+                report::fatal(
+                    TITLE,
+                    &message,
+                    report::audience(Run::bad_command_line(&args)).mode(),
+                );
+                return Ok(report::BAD_COMMAND_LINE as u32);
+            }
         };
         // One launcher at a time, held until the game exits: a second
         // start brings the window forward or refuses to play.
@@ -233,13 +246,6 @@ mod app {
         let no_window = cli.has("--no-window");
         let check_only = cli.has("--check");
         let setup_only = cli.has("--setup");
-        if settings_only && cli.options_given() {
-            return Err(
-                "--settings opens the window and takes no other options; save them in the \
-                 window or launcher.cfg"
-                    .to_string(),
-            );
-        }
         let wants_window =
             settings_only || (!cli.options_given() && !no_window && !check_only && !setup_only);
         if wants_window {

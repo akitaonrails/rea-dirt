@@ -94,3 +94,31 @@ fn a_setup_refused_by_a_running_launcher_reports_as_a_command() {
         Mode::Command { interactive: false }
     );
 }
+
+/// A command line that fails to parse is reported like a command
+/// (rea-launcher-sdk#1): printed in a terminal with no modal box to wait
+/// on, a dialog only from a shortcut, nothing to click for scripts and
+/// the Linux helper; exit 2.
+#[test]
+fn a_bad_command_line_is_reported_like_a_command_and_exits_2() {
+    use dirt_launcher::config::{Stop, read_command_line};
+    use rea_launcher_win32::report::BAD_COMMAND_LINE;
+    let bad = |args: &[&str], wine| {
+        let read = read_command_line(args.iter().map(|a| a.to_string()));
+        assert!(matches!(read, Err(Stop::BadCommandLine(_))), "{args:?}");
+        Audience::of(Run::bad_command_line(args), wine).mode()
+    };
+    for args in [&["--bogus-flag"][..], &["--look", "invalid"]] {
+        assert_eq!(bad(args, false), Mode::Command { interactive: true });
+        assert_eq!(bad(args, true), Mode::Command { interactive: true });
+    }
+    assert_eq!(
+        bad(&["--no-window", "--bogus-flag"], false),
+        Mode::Command { interactive: false }
+    );
+    assert_eq!(
+        bad(&["--no-window", "--linux", "--look", "invalid"], true),
+        Mode::Command { interactive: false }
+    );
+    assert_eq!(BAD_COMMAND_LINE, 2);
+}

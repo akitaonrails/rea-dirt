@@ -415,6 +415,38 @@ impl Cli {
     }
 }
 
+/// Why a run stops at its command line, before any work.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Stop {
+    /// `--help` (`-h`, `/?`): the usage, exit 0.
+    Help(String),
+    /// An unknown flag, a missing or bad value, or `--settings` with
+    /// options: the error and the usage. `main` reports it like a command
+    /// (SDK `report::Run::bad_command_line`) and exits 2
+    /// (`report::BAD_COMMAND_LINE`), never as a play run's modal box.
+    BadCommandLine(String),
+}
+
+/// The command line, checked before anything else so a typo is reported
+/// even when the window would open instead of playing.
+pub fn read_command_line<I: IntoIterator<Item = String>>(args: I) -> Result<Cli, Stop> {
+    let cli = Settings::parse_args(args).map_err(|message| {
+        if message == usage() {
+            Stop::Help(message)
+        } else {
+            Stop::BadCommandLine(message)
+        }
+    })?;
+    if cli.has("--settings") && cli.options_given() {
+        return Err(Stop::BadCommandLine(format!(
+            "--settings opens the window and takes no other options; save them in the \
+             window or launcher.cfg\n\n{}",
+            usage()
+        )));
+    }
+    Ok(cli)
+}
+
 impl Settings {
     /// Takes one checked value (keys are the table's, aliases resolved).
     pub fn apply(&mut self, key: &str, value: Value) -> Result<(), Rejected> {
@@ -549,6 +581,60 @@ mod tests {
 
     fn args(list: &[&str]) -> Result<Cli, String> {
         Settings::parse_args(list.iter().map(|a| a.to_string()))
+    }
+
+    fn read(list: &[&str]) -> Result<Cli, Stop> {
+        read_command_line(list.iter().map(|a| a.to_string()))
+    }
+
+    #[test]
+    fn help_stops_with_the_usage() {
+        for flag in ["--help", "-h", "/?"] {
+            assert_eq!(read(&[flag]), Err(Stop::Help(usage())), "{flag}");
+        }
+    }
+
+    #[test]
+    fn a_bad_command_line_stops_with_the_error_and_the_usage() {
+        // An unknown flag, a known flag with a bad or missing value, and
+        // --settings with options (Windows 10 test, rea-launcher-sdk#1).
+        for (line, error) in [
+            (&["--bogus-flag"][..], "unknown option --bogus-flag"),
+            (&["--look", "invalid"], "--look needs"),
+            (
+                &["--check", "--game", r"D:\x", "--look", "invalid"],
+                "--look needs",
+            ),
+            (&["--resolution", "abc"], "--resolution needs"),
+            (&["--vsync", "maybe"], "--vsync needs"),
+            (&["--game"], "--game needs a value"),
+            (
+                &["--settings", "--quality", "high"],
+                "--settings opens the window",
+            ),
+        ] {
+            match read(line) {
+                Err(Stop::BadCommandLine(text)) => {
+                    assert!(text.starts_with(error), "{line:?}: {text}");
+                    assert!(text.contains("DiRTLauncher [options]"), "{line:?}: {text}");
+                }
+                other => panic!("{line:?}: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn a_good_command_line_reads() {
+        for line in [
+            &[][..],
+            &["--check"],
+            &["--settings"],
+            &["--settings", "--linux"],
+            &["--no-window", "--linux", "--scaler", "fsr"],
+            &["--setup", "--game", r"C:\DiRT"],
+        ] {
+            assert!(read(line).is_ok(), "{line:?}");
+        }
     }
 
     #[test]
