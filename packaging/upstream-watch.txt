@@ -1,0 +1,13 @@
+# Components the weekly watch-upstream workflow checks, one per line:
+#
+#   name owner/repo asset-name-prefix
+#
+# `name` is a pin in packaging/third-party.txt whose url is a file that
+# owner/repo's releases upload (https://github.com/owner/repo/releases/download/…).
+# Every pin of a GitHub release belongs here (launcher-check unwatched-pins).
+#
+# DXVK's releases upload dxvk-X.Y.Z.tar.gz first, then dxvk-native-…; the
+# first asset with the prefix is the one pinned. Its licence pin
+# (dxvk-license) is a file at a commit, not a release upload: not watched.
+
+dxvk doitsujin/dxvk dxvk-
