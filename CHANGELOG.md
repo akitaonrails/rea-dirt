@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+From a test of the Windows build on a native Windows 10
+([rea-launcher-sdk#1](https://github.com/akitaonrails/rea-launcher-sdk/issues/1)).
+
+### Changed
+
+- Updated rea-launcher-sdk to v0.4.2.
+- `--check` while another launcher is open (its window, or the game it
+  started) says so and exits 5, like `--setup`. Before, it ran next to
+  it.
+- `--settings` with other options is a bad command line: exit 2 (was 1).
+
+### Fixed
+
+- A mistyped flag or a bad value (`--bogus-flag`, `--look invalid`)
+  started from a terminal printed the error and also opened a message
+  box that kept the command waiting until OK was pressed, then exited 1.
+  Now it prints the error and the usage and exits 2 at once; a dialog
+  appears only when the launcher was started from a shortcut.
+
+### Added
+
+- The README says what to do when SmartScreen shows "Windows protected
+  your PC" for the unsigned launcher, and lists every registry value the
+  launcher writes (the fast-GPU setting on Windows; DXVK's `d3d9`
+  override and the settings window's `UseEGL` in the Wine prefix), with
+  how to remove them.
+- A weekly check for new DXVK releases opens an issue in this repository
+  (the bundled DXVK only changes after testing).
+
 ## v0.3.0 - 2026-11-03
 
 ### Changed
