@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.3.1 - 2026-11-03
+
 From a test of the Windows build on a native Windows 10
 ([rea-launcher-sdk#1](https://github.com/akitaonrails/rea-launcher-sdk/issues/1)).
 
