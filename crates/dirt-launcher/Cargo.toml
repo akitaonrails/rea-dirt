@@ -15,6 +15,11 @@ rea-launcher.workspace = true
 # Edits DiRT's hardware_settings XML attribute by attribute.
 quick-xml.workspace = true
 
+# Version information, icon and manifest in DiRTLauncher.exe (build.rs),
+# so antivirus programs see a named, versioned program.
+[build-dependencies]
+rea-launcher-build.workspace = true
+
 [target.'cfg(windows)'.dependencies]
 rea-launcher-win32.workspace = true
 rea-launcher-ui.workspace = true
