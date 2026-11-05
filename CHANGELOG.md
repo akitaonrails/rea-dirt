@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.3.2 - 2026-11-05
+
 Fewer antivirus false positives.
 
 ### Changed
