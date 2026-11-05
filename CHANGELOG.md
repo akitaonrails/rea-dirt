@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+Fewer antivirus false positives.
+
+### Changed
+
+- Updated rea-launcher-sdk to v0.4.3.
+- `DiRTLauncher.exe` now says what it is: its name, version, publisher
+  and icon show in Explorer's Properties, so antivirus programs are less
+  likely to flag it as an unknown program.
+
 ## v0.3.1 - 2026-11-03
 
 From a test of the Windows build on a native Windows 10
