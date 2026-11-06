@@ -4,11 +4,15 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use dirt_launcher::config::{self, Aspect, Quality, Scaler};
+use dirt_launcher::directx;
 use dirt_launcher::edition;
 use dirt_launcher::form::{self, Form, Look, Picture};
+use rea_launcher::download::{self, Job};
 use rea_launcher::{cfg, fsx};
+use rea_launcher_ui::download::{Download, DownloadAction, DownloadState, download_row};
 use rea_launcher_ui::egui::{self, Key, Rect, Response, TextureHandle, vec2};
 use rea_launcher_ui::pad::{self, Nav, PadNav};
 use rea_launcher_ui::spec::{RowOptions, mark_rendered, spec_row_with};
@@ -36,12 +40,20 @@ pub struct Host {
     /// Linux helper (`--linux`): hints use Wine's `Z:` drive and the
     /// gamescope scaler is shown.
     pub linux: bool,
+    /// DXVK or Wine provides DirectX 9 DLLs (Linux helper, Wine or Proton).
+    pub dxvk: bool,
     pub pads: usize,
     pub pick_folder: Box<dyn Fn() -> Option<PathBuf>>,
     /// Rumbles every pad briefly; how many took it.
     pub test_rumble: Box<dyn Fn() -> usize>,
     /// The XInput buttons held now (for pad navigation).
     pub buttons: Box<dyn Fn() -> u16>,
+    /// Where the DirectX 9 files are kept.
+    pub directx_root: PathBuf,
+    /// System folders checked for `d3dx9_33.dll` and `xinput1_3.dll` on Windows.
+    pub system_dirs: Vec<PathBuf>,
+    /// Starts the DirectX download on a worker thread.
+    pub start_download: Box<dyn Fn(Arc<Job>)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -115,6 +127,9 @@ pub struct Window {
     rumble_test: Option<String>,
     pad: PadNav,
     pending: Vec<Nav>,
+    download: Option<Arc<Job>>,
+    /// A close was held back once because the download was running.
+    close_held: bool,
     pub outcome: Arc<Mutex<Outcome>>,
 }
 
@@ -137,6 +152,8 @@ impl Window {
             rumble_test: None,
             pad: PadNav::default(),
             pending: Vec::new(),
+            download: None,
+            close_held: false,
             outcome: Arc::new(Mutex::new(Outcome::Closed)),
         }
     }
@@ -145,7 +162,55 @@ impl Window {
         matches!(self.check, Check::Found(_))
     }
 
+    /// Why Play waits while the DirectX files download or unpack.
+    pub const PLAY_WAITS: &'static str =
+        "Play waits until the DirectX 9 download finishes (or press Cancel).";
+
+    /// What the window says the first time it is closed during a download.
+    pub const CLOSE_HELD: &'static str = "The DirectX 9 download is still running. Close the \
+         window again to stop it; the next download picks up where it stopped.";
+
+    /// Whether the DirectX download (or its unpacking) is running.
+    fn downloading(&self) -> bool {
+        self.download
+            .as_ref()
+            .is_some_and(|job| job.phase().running())
+    }
+
+    /// On native Windows (`!self.host.dxvk`), returns which required DirectX 9
+    /// DLLs (`d3dx9_33.dll`, `xinput1_3.dll`) are missing from the downloaded
+    /// DirectX folder, the chosen game folder, and Windows (`SysWOW64`/`System32`).
+    fn missing_directx(&self) -> Vec<&'static str> {
+        if self.host.dxvk {
+            return Vec::new();
+        }
+        let pin = directx::pin();
+        let dx_dir = download::installed(&pin, &self.host.directx_root);
+        let game = self.form.game.trim();
+        let game_dir = (!game.is_empty()).then(|| Path::new(game));
+        directx::missing_required_dlls(dx_dir.as_deref(), game_dir, &self.host.system_dirs)
+    }
+
+    /// The window was asked to close; true to let it.
+    pub fn close_requested(&mut self) -> bool {
+        if !self.downloading() {
+            return true;
+        }
+        if !self.close_held {
+            self.close_held = true;
+            self.error = Some(Self::CLOSE_HELD.to_string());
+            return false;
+        }
+        if let Some(job) = &self.download {
+            job.cancel();
+        }
+        true
+    }
+
     fn play(&mut self, ctx: &egui::Context) {
+        if self.downloading() {
+            return;
+        }
         if !self.ready() {
             self.tab = Tab::Play;
             return;
@@ -175,6 +240,12 @@ impl Window {
     /// The whole window.
     pub fn draw(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        if self.close_held && !self.downloading() {
+            self.close_held = false;
+            if self.error.as_deref() == Some(Self::CLOSE_HELD) {
+                self.error = None;
+            }
+        }
         let full = ui.max_rect();
         ui.painter().rect_filled(full, 0.0, BLUE);
         let layout = Layout::new(full, PHOTO_W);
@@ -202,8 +273,13 @@ impl Window {
                 Tab::Controls => self.controls_tab(ui),
             });
         });
-        let hint = "The source game is never modified. Settings are saved when you press Play.";
-        if widgets::footer(ui, layout.footer, hint, self.ready()).clicked() {
+        let downloading = self.downloading();
+        let hint = if downloading {
+            Self::PLAY_WAITS
+        } else {
+            "The source game is never modified. Settings are saved when you press Play."
+        };
+        if widgets::footer(ui, layout.footer, hint, self.ready() && !downloading).clicked() {
             self.play(&ctx);
         }
         if ctx.input(|input| input.key_pressed(Key::Enter)) && !ctx.egui_wants_keyboard_input() {
@@ -252,8 +328,17 @@ impl Window {
     }
 
     fn status(&self, ui: &mut egui::Ui) {
+        let missing_dx = self.missing_directx();
         let (text, color) = match (&self.error, &self.check) {
             (Some(error), _) => (error.clone(), ERROR),
+            (None, Check::Found(_)) if self.downloading() => (Self::PLAY_WAITS.to_string(), MUTED),
+            (None, Check::Found(_)) if !missing_dx.is_empty() => (
+                format!(
+                    "Missing DirectX 9 files ({}). Click Download below before playing.",
+                    missing_dx.join(", ")
+                ),
+                GOLD,
+            ),
             (None, Check::Found(_)) => ("Ready. Press Play or Enter.".to_string(), MUTED),
             (None, _) => (
                 "First, show the launcher where the game is.".to_string(),
@@ -343,6 +428,62 @@ impl Window {
         ui.add_space(16.0);
         // The modern-CPU fix has no setting: say once that it is applied.
         widgets::note(ui, CPU_NOTE);
+        ui.add_space(12.0);
+        self.directx_section(ui);
+    }
+
+    fn directx_section(&mut self, ui: &mut egui::Ui) {
+        widgets::heading(ui, directx::LABEL);
+        widgets::note(
+            ui,
+            "Windows 10 and 11 lack the DirectX 9 files the game was built with (d3dx9_33.dll \
+             and xinput1_3.dll). One download from Microsoft (100 MB) puts them in the private \
+             copy. Under Linux the game usually runs without them.",
+        );
+        let missing = self.missing_directx();
+        if !missing.is_empty() && !self.downloading() {
+            widgets::error_note(
+                ui,
+                &format!(
+                    "Missing on this PC: {}. Click Download to install them into the private copy.",
+                    missing.join(", ")
+                ),
+            );
+        }
+        let pin = directx::pin();
+        let root = self.host.directx_root.clone();
+        let installed = download::installed(&pin, &root).is_some();
+        let phase = self.download.as_ref().map(|job| job.phase());
+        let state =
+            DownloadState::from_phase(phase.as_ref(), installed, download::partial(&pin, &root));
+        let row = Download {
+            label: directx::LABEL,
+            size: pin.size,
+            state,
+        };
+        match download_row(ui, &row) {
+            Some(DownloadAction::Start) => {
+                let job = Arc::new(Job::default());
+                self.download = Some(job.clone());
+                (self.host.start_download)(job);
+            }
+            Some(DownloadAction::Cancel) => {
+                if let Some(job) = &self.download {
+                    job.cancel();
+                }
+            }
+            Some(DownloadAction::Remove) => {
+                if let Err(error) = download::remove(&pin, &root) {
+                    self.error = Some(format!("Can't remove the DirectX 9 files: {error}"));
+                }
+                self.download = None;
+            }
+            None => {}
+        }
+        widgets::note(ui, directx::LICENCE);
+        if state.running() {
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
     }
 
     fn refresh_resolutions(&mut self) {
@@ -492,7 +633,7 @@ mod native {
     use rea_launcher_ui::eframe;
     use rea_launcher_ui::theme;
     use rea_launcher_ui::window::{SIZE, WindowFit};
-    use rea_launcher_win32::{dialog, display, wine, xinput};
+    use rea_launcher_win32::{dialog, disk, display, http, wine, xinput};
     use std::time::Duration;
 
     struct App {
@@ -505,12 +646,23 @@ mod native {
         }
 
         fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+            if ui.ctx().input(|input| input.viewport().close_requested())
+                && !self.window.close_requested()
+            {
+                ui.ctx()
+                    .send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            }
             self.window.draw(ui);
             ui.ctx().request_repaint_after(Duration::from_millis(50));
         }
     }
 
-    pub fn show(settings_path: &Path, saved: Option<&str>, linux: bool) -> Result<Outcome, String> {
+    pub fn show(
+        settings_path: &Path,
+        directx_root: &Path,
+        saved: Option<&str>,
+        linux: bool,
+    ) -> Result<Outcome, String> {
         let wine = wine::is_wine();
         // Under Wine the window is created at its final size (a later
         // resize displaces input on fractional DPI). Wine then scales the
@@ -526,10 +678,30 @@ mod native {
         let host = Host {
             screen,
             linux,
+            dxvk: linux || wine,
             pads: xinput::connected(),
             pick_folder: Box::new(|| dialog::pick_folder("Choose the folder with DiRT.exe")),
             test_rumble: Box::new(|| xinput::test_rumble(60, Duration::from_millis(500))),
             buttons: Box::new(xinput::buttons),
+            directx_root: directx_root.to_path_buf(),
+            system_dirs: directx::windows_system_dirs(),
+            start_download: {
+                let root = directx_root.to_path_buf();
+                Box::new(move |job| {
+                    let root = root.clone();
+                    std::thread::spawn(move || {
+                        let fetch =
+                            http::WinHttp::new(concat!("DiRTLauncher/", env!("CARGO_PKG_VERSION")));
+                        let _ = directx::install(
+                            &directx::pin(),
+                            &root,
+                            &disk::free_space,
+                            &fetch,
+                            &job,
+                        );
+                    });
+                })
+            },
         };
         let window = Window::new(settings_path.to_path_buf(), saved.map(str::to_string), host);
         let outcome = window.outcome.clone();

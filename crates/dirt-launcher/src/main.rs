@@ -36,12 +36,12 @@ mod app {
     use dirt_launcher::display::Fallback;
     use dirt_launcher::plan::{self, Env};
     use dirt_launcher::runtime::DXVK_MARKER;
-    use dirt_launcher::{edition, hardware, instance, runtime};
+    use dirt_launcher::{directx, edition, hardware, instance, runtime};
     use rea_launcher::log::Log;
-    use rea_launcher::{cfg, fsx, identify, paths};
+    use rea_launcher::{cfg, download, fsx, identify, paths};
     use rea_launcher_win32::instance::SecondStart;
     use rea_launcher_win32::report::{self, Run};
-    use rea_launcher_win32::{display as screen, gpu, process, wine, xinput};
+    use rea_launcher_win32::{disk, display as screen, gpu, http, process, wine, xinput};
 
     use crate::ui;
 
@@ -52,6 +52,10 @@ mod app {
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir)
             .join("DiRTLauncher")
+    }
+
+    pub fn directx_root() -> PathBuf {
+        home().join("directx")
     }
 
     pub fn log_line(line: &str) {
@@ -188,6 +192,43 @@ mod app {
         }
     }
 
+    /// `--download-directx`: the window's DirectX download without the
+    /// window, logging progress every 10 percent.
+    fn download_directx() -> Result<u32, String> {
+        let pin = directx::pin();
+        let root = directx_root();
+        if download::installed(&pin, &root).is_some() {
+            let note = directx::already_note();
+            log_line(&note);
+            command(&note);
+            return Ok(0);
+        }
+        let job = std::sync::Arc::new(download::Job::default());
+        let worker = job.clone();
+        let handle = std::thread::spawn(move || {
+            let fetch = http::WinHttp::new(concat!("DiRTLauncher/", env!("CARGO_PKG_VERSION")));
+            directx::install(&pin, &root, &disk::free_space, &fetch, &worker)
+        });
+        let mut logged = None;
+        while !handle.is_finished() {
+            if let download::Phase::Downloading { done, total } = job.phase() {
+                let tenth = done * 10 / total.max(1);
+                if logged != Some(tenth) {
+                    log_line(&format!("directx: downloading {}%", tenth * 10));
+                    logged = Some(tenth);
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        let dir = handle
+            .join()
+            .map_err(|_| "the download stopped unexpectedly".to_string())??;
+        let note = directx::done_note(directx::dlls(&dir).len(), &dir);
+        log_line(&note);
+        command(&note);
+        Ok(0)
+    }
+
     const WINDOW_CLOSED: u32 = 3;
     const WINDOW_UNAVAILABLE: u32 = 4;
 
@@ -244,6 +285,9 @@ mod app {
         let no_window = cli.has("--no-window");
         let check_only = cli.has("--check");
         let setup_only = cli.has("--setup");
+        if cli.has("--download-directx") {
+            return download_directx();
+        }
         let wants_window =
             settings_only || (!cli.options_given() && !no_window && !check_only && !setup_only);
         if wants_window {
@@ -267,7 +311,7 @@ mod app {
                 }
             };
             let saved = cfg::read_file(&settings_path).ok().flatten();
-            match ui::show(&settings_path, saved.as_deref(), linux) {
+            match ui::show(&settings_path, &directx_root(), saved.as_deref(), linux) {
                 Ok(ui::Outcome::Play) => {
                     log_line("settings window: play");
                     if settings_only {
@@ -365,6 +409,12 @@ mod app {
             synced.linked
         ));
 
+        let directx_dir = download::installed(&directx::pin(), &directx_root());
+        let directx_files = directx::for_launch(&game, &runtime_dir, directx_dir.as_deref());
+        for line in &directx_files.log {
+            log_line(line);
+        }
+
         let screen = screen::screen_size();
         let wine = wine::is_wine();
         let env = Env {
@@ -377,6 +427,7 @@ mod app {
                 .map(usize::from)
                 .unwrap_or(4),
             dll_overrides: std::env::var("WINEDLLOVERRIDES").ok(),
+            directx: directx_files.dlls.clone(),
             runtime: runtime_dir.display().to_string(),
         };
         let mut plan = plan::plan(&settings, &env);
@@ -463,7 +514,22 @@ mod app {
             .map_err(|error| format!("cannot start {}: {error}", plan.command.join(" ")))?;
         xinput::stop_rumble();
         let code = status.code().unwrap_or(1) as u32;
-        log_line(&format!("game exited with {code}"));
+        log_line(&format!("game exited with {code} (0x{code:08X})"));
+        if code >= 0xC000_0000 {
+            let detail = if code == 0xC000_0135 {
+                "a required DLL (such as d3dx9_33.dll or xinput1_3.dll) was not found. \
+                 Open the launcher and click Download under Microsoft DirectX 9 files, \
+                 or run: DiRTLauncher --download-directx"
+            } else {
+                "a Windows startup error or crash occurred"
+            };
+            let msg = format!(
+                "{} exited with error 0x{code:08X} ({detail}).\n\nSee {} for details.",
+                edition::EXE,
+                home().join("launcher.log").display()
+            );
+            fatal(&msg);
+        }
         // Held until here: a second start while the game ran was refused.
         drop(guard);
         Ok(code)

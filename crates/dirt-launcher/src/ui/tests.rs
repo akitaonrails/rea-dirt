@@ -20,14 +20,18 @@ fn temp(name: &str) -> PathBuf {
     dir
 }
 
-fn host(linux: bool) -> Host {
+fn host(linux: bool, root: PathBuf) -> Host {
     Host {
         screen: Some((3840, 2160)),
         linux,
+        dxvk: linux,
         pads: 1,
         pick_folder: Box::new(|| None),
         test_rumble: Box::new(|| 1),
         buttons: Box::new(|| 0),
+        directx_root: root,
+        system_dirs: Vec::new(),
+        start_download: Box::new(|_| {}),
     }
 }
 
@@ -36,7 +40,7 @@ fn open(saved: Option<&str>, linux: bool, name: &str) -> (Harness<'static, Windo
     let window = Window::new(
         dir.join("launcher.cfg"),
         saved.map(str::to_string),
-        host(linux),
+        host(linux, dir.join("directx")),
     );
     let ui = testing::harness(&PALETTE, &METRICS, window, |ui, window: &mut Window| {
         window.draw(ui)
@@ -277,4 +281,29 @@ fn test_rumble_reports_the_result() {
         ui.query_by_label_contains("Sent for half a second")
             .is_some()
     );
+}
+
+#[test]
+fn missing_directx_on_windows_shows_warning_until_present() {
+    let (mut ui, dir) = open(None, false, "missing-dx");
+    ready(&mut ui);
+    assert!(
+        ui.query_by_label_contains("Missing DirectX 9 files (d3dx9_33.dll, xinput1_3.dll)")
+            .is_some()
+    );
+    assert!(
+        ui.query_by_label_contains("Missing on this PC: d3dx9_33.dll, xinput1_3.dll")
+            .is_some()
+    );
+    let sys = dir.join("syswow64");
+    std::fs::create_dir_all(&sys).unwrap();
+    std::fs::write(sys.join("d3dx9_33.dll"), b"dx").unwrap();
+    std::fs::write(sys.join("xinput1_3.dll"), b"xi").unwrap();
+    ui.state_mut().host.system_dirs = vec![sys];
+    ui.run();
+    assert!(
+        ui.query_by_label_contains("Ready. Press Play or Enter.")
+            .is_some()
+    );
+    assert!(ui.query_by_label_contains("Missing on this PC:").is_none());
 }

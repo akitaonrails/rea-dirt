@@ -9,6 +9,7 @@ source. Add a row before bundling anything new.
 | --- | --- | --- |
 | `rea-launcher`, `rea-launcher-win32`, `rea-launcher-ui` (rea-launcher-sdk, pinned by tag in `Cargo.toml`) | MIT OR Apache-2.0 | https://github.com/akitaonrails/rea-launcher-sdk |
 | `quick-xml` | MIT | https://github.com/tafia/quick-xml |
+| `cab` (and `lzxd`, `flate2`, `byteorder`, `time`) — reads Microsoft's DirectX package after the player downloads it | MIT (`cab`, `lzxd`); MIT OR Apache-2.0 (the others) | https://crates.io/crates/cab |
 | `sha2` and its RustCrypto dependencies (through the SDK) | MIT OR Apache-2.0 | https://github.com/RustCrypto/hashes |
 | `windows-sys` (through the SDK) | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | `eframe`, `egui` and their dependencies (`winit`, `glutin`, `glow`, `ab_glyph`, a JPEG decoder, …), through `rea-launcher-ui` | MIT OR Apache-2.0 (dependencies: MIT, Apache-2.0, Zlib, BSD; see `cargo tree`, checked by `cargo deny`) | https://github.com/emilk/egui |
@@ -33,6 +34,12 @@ source. Add a row before bundling anything new.
 | `packaging/appimage/dirt-launcher.png` (AppImage icon) | this project | MIT OR Apache-2.0 | this repository |
 | `docs/images/launcher-*.jpg` (screenshots of the settings window) | this project | MIT OR Apache-2.0 (the photo inside: CC BY 2.0, Carolyn Williams) | this repository |
 | The README's gameplay video and its poster (hosted outside the repository) | the project's owner | screenshots of the game at work, © Codemasters for the game's imagery | linked from `README.md` |
+
+## Downloaded on the player's request (never bundled)
+
+| Component | Licence | Source | Why not bundled |
+| --- | --- | --- | --- |
+| Microsoft DirectX End-User Runtime, June 2010 (`directx_Jun2010_redist.exe`, 100,275,120 bytes, SHA-256 `053f76dcbb28802e23341b6a787e3b0791c0fa5c8d4d011b1044172dbf89c73b`); the launcher keeps its 32-bit `d3dx9_*.dll`, `D3DCompiler_*.dll` and `xinput1_*.dll` | Microsoft Software License Terms, DirectX End User Runtime (inside the package; it lets the player install and use the software, and forbids publishing it for others to copy). The launcher takes the DLLs out of the cabinets without running the package's installer (DXSETUP), which is what would show the terms, so the window's DirectX row and `--download-directx` say "Microsoft's DirectX End-User Runtime licence applies" with a link to Microsoft's page for the package | download.microsoft.com (pinned in `crates/dirt-launcher/src/directx.rs`) | the runtime's licence forbids redistribution; the DirectX SDK's redistribution rights require Microsoft's DirectSetup installer |
 
 ## Used by the game but not shipped by us
 

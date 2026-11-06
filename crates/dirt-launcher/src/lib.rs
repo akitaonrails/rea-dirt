@@ -1,4 +1,5 @@
 pub mod config;
+pub mod directx;
 pub mod display;
 pub mod edition;
 pub mod form;

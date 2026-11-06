@@ -14,6 +14,7 @@ DiRTLauncher [options]
   --scaler nearest|pixel|fsr|linear         Scaler (Linux helper)
   --check                                   check the game folder and exit
   --setup                                   prepare the private copy and the game's settings, without playing
+  --download-directx                        download Microsoft's DirectX 9 files for the private copy (100 MB)
   --no-window                               play with the saved settings, no launcher window
   --settings                                only show the settings window
   --linux                                   running under dirt-play or the AppImage: install DXVK into the copy

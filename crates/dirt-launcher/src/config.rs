@@ -311,11 +311,15 @@ pub const OPTIONS: &[OptionSpec] = &[
 ];
 
 /// The launcher's value-less switches and their `--help` lines.
-pub const SWITCH_HELP: [(&str, &str); 6] = [
+pub const SWITCH_HELP: [(&str, &str); 7] = [
     ("--check", "check the game folder and exit"),
     (
         "--setup",
         "prepare the private copy and the game's settings, without playing",
+    ),
+    (
+        "--download-directx",
+        "download Microsoft's DirectX 9 files for the private copy (100 MB)",
     ),
     (
         "--no-window",
@@ -330,8 +334,8 @@ pub const SWITCH_HELP: [(&str, &str); 6] = [
 ];
 
 /// The launcher's value-less switches.
-pub const SWITCHES: [&str; 6] = {
-    let mut flags = [""; 6];
+pub const SWITCHES: [&str; 7] = {
+    let mut flags = [""; 7];
     let mut i = 0;
     while i < flags.len() {
         flags[i] = SWITCH_HELP[i].0;

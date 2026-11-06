@@ -28,6 +28,7 @@ Env {
     mode_supported: false,
     logical_cpus: 6,
     dll_overrides: None,
+    directx: [],
     runtime: "C:\\Users\\José\\AppData\\Local\\DiRTLauncher\\DiRT",
 }
 

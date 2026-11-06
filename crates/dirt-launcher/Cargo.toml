@@ -1,6 +1,6 @@
 [package]
 name = "dirt-launcher"
-version = "0.3.2"
+version = "0.3.3"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -14,6 +14,8 @@ path = "src/main.rs"
 rea-launcher.workspace = true
 # Edits DiRT's hardware_settings XML attribute by attribute.
 quick-xml.workspace = true
+# Takes the D3DX9 and XInput 1.3 DLLs out of Microsoft's DirectX package (MIT).
+cab = "0.6"
 
 # Version information, icon and manifest in DiRTLauncher.exe (build.rs),
 # so antivirus programs see a named, versioned program.

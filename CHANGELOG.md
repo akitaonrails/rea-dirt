@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## v0.3.3 - 2026-11-06
+
+### Added
+
+- **Microsoft DirectX 9 files downloader (`--download-directx` and Play tab
+  Download button) with missing-DLL indicator on Windows.** `DiRT.exe`
+  statically links `d3dx9_33.dll` and `XINPUT1_3.dll`, neither of which
+  ships on a clean Windows 10 or 11 installation (and Microsoft's DirectX
+  End-User Runtime licence forbids bundling them). When either DLL is
+  missing from the system and the launcher's DirectX folder on Windows, the
+  settings window shows a clear warning and one-click **Download** button
+  that fetches Microsoft's June 2010 DirectX End-User Runtime (pinned by
+  SHA-256) and places the 32-bit DLLs into the private copy.
+- **Fatal Windows startup exit codes (`0xC0000135` `STATUS_DLL_NOT_FOUND`
+  and crashes) are now reported** instead of exiting silently.
+
 ## v0.3.2 - 2026-11-05
 
 Fewer antivirus false positives.

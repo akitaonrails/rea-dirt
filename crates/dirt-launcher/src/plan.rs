@@ -31,6 +31,8 @@ pub struct Env {
     pub logical_cpus: usize,
     /// `WINEDLLOVERRIDES` as the launcher inherited it.
     pub dll_overrides: Option<String>,
+    /// The DirectX 9 DLLs the player downloaded (file names).
+    pub directx: Vec<String>,
     /// The private copy as Windows spells it.
     pub runtime: String,
 }
@@ -84,12 +86,34 @@ pub fn plan(settings: &Settings, env: &Env) -> Plan {
     let selection = hardware::select_workers(workers, env.logical_cpus);
 
     let dxvk = env.linux;
-    let dll_overrides = dxvk
-        .then(|| rea_launcher::wine::merge_dll_overrides("d3d9=n,b", env.dll_overrides.as_deref()));
-    let (app_dlls, app_dlls_off) = match (env.wine, dxvk) {
-        (true, true) => (vec!["d3d9".to_string()], Vec::new()),
-        (true, false) => (Vec::new(), vec!["d3d9".to_string()]),
-        (false, _) => (Vec::new(), Vec::new()),
+    let native = crate::directx::override_names(&env.directx);
+    let dll_overrides = if dxvk || !native.is_empty() {
+        let mut list: Vec<&str> = Vec::new();
+        if dxvk {
+            list.push("d3d9");
+        }
+        list.extend(native.iter().map(String::as_str));
+        let rule = format!("{}=n,b", list.join(","));
+        Some(rea_launcher::wine::merge_dll_overrides(
+            &rule,
+            env.dll_overrides.as_deref(),
+        ))
+    } else {
+        None
+    };
+    let (app_dlls, app_dlls_off) = if env.wine {
+        let mut on: Vec<String> = Vec::new();
+        if dxvk {
+            on.push("d3d9".into());
+        }
+        on.extend(native.iter().cloned());
+        let off = std::iter::once("d3d9".to_string())
+            .chain(crate::directx::all_override_names())
+            .filter(|name| !on.contains(name))
+            .collect();
+        (on, off)
+    } else {
+        (Vec::new(), Vec::new())
     };
 
     let exe = format!("{}\\{EXE}", env.runtime.trim_end_matches('\\'));
@@ -268,7 +292,9 @@ mod tests {
             Some("d3d9=n,b;mscoree,mshtml=")
         );
         assert_eq!(plan_l.app_dlls, ["d3d9"]);
-        assert!(plan_l.app_dlls_off.is_empty());
+        assert!(!plan_l.app_dlls_off.contains(&"d3d9".to_string()));
+        assert!(plan_l.app_dlls_off.contains(&"d3dx9_33".to_string()));
+        assert!(plan_l.app_dlls_off.contains(&"xinput1_3".to_string()));
         // Proton running the launcher directly: Proton's own DXVK, and our
         // earlier per-exe override is taken back.
         let proton = Env {
@@ -278,7 +304,8 @@ mod tests {
         let plan_p = plan(&Settings::default(), &proton);
         assert!(!plan_p.install_dxvk && plan_p.dll_overrides.is_none());
         assert!(plan_p.app_dlls.is_empty());
-        assert_eq!(plan_p.app_dlls_off, ["d3d9"]);
+        assert!(plan_p.app_dlls_off.contains(&"d3d9".to_string()));
+        assert!(plan_p.app_dlls_off.contains(&"d3dx9_33".to_string()));
         // Native Windows: no Wine settings at all, the fast GPU instead.
         let plan_w = plan(&Settings::default(), &windows());
         assert!(plan_w.app_dlls.is_empty() && plan_w.app_dlls_off.is_empty());
