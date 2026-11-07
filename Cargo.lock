@@ -435,7 +435,7 @@ dependencies = [
 
 [[package]]
 name = "dirt-launcher"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "cab",
  "quick-xml",
