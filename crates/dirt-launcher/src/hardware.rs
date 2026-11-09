@@ -190,7 +190,8 @@ pub fn worker_map_xml(cores: u32) -> Result<String, String> {
 }
 
 /// The `hardware_settings_config.xml` the launcher starts from when the game
-/// folder has none (launcher-made, every value set by `configure_xml`).
+/// folder has none (launcher-made, every value set by `configure_xml`, which
+/// also adds the game's default `<audio_card>`).
 pub const DEFAULT_CONFIG: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <hardware_settings_config version="30">
   <cpu><threadStrategy /></cpu>
@@ -217,6 +218,33 @@ pub const DEFAULT_CONFIG: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
   <motion enabled="false" ip="127.0.0.1" port="20777" delay="1" extradata="0" />
 </hardware_settings_config>
 "#;
+
+/// DiRT's own default audio settings (`system/hardware_settings_config.xml`
+/// of v1.22: software mixing, no reverb, 40 voices). [`configure_xml`] adds
+/// them to a file that has no `<audio_card>`: the game's Options menu reads
+/// them and crashes when they are missing (rea-dirt#1). A player's own
+/// audio settings are kept.
+const AUDIO_CARD: &str =
+    r#"<audio_card><audio mixing="software" reverbs="0" voices="40" /></audio_card>"#;
+
+/// Whether the hardware settings XML has an `<audio_card>` element.
+fn has_audio_card(input: &str) -> Result<bool, String> {
+    let mut reader = Reader::from_str(input);
+    loop {
+        match reader
+            .read_event()
+            .map_err(|error| format!("invalid hardware settings XML: {error}"))?
+        {
+            Event::Eof => return Ok(false),
+            Event::Start(element) | Event::Empty(element)
+                if element.name().as_ref() == b"audio_card" =>
+            {
+                return Ok(true);
+            }
+            _ => {}
+        }
+    }
+}
 
 fn set_attr(element: &mut BytesStart, key: &str, value: &str) {
     let attributes: Vec<_> = element
@@ -395,14 +423,52 @@ pub fn configure_xml(
     picture: &Picture,
     selection: WorkerSelection,
 ) -> Result<String, String> {
+    let mut add_audio = !has_audio_card(input)?;
     let mut reader = Reader::from_str(input);
     reader.config_mut().trim_text(false);
     let mut writer = Writer::new(Vec::new());
+    // The whitespace before the current tag, repeated after an inserted
+    // `<audio_card>` so the tag keeps its indentation.
+    let mut indent = String::new();
+    let mut depth = 0usize;
     loop {
-        match reader
+        let event = reader
             .read_event()
-            .map_err(|error| format!("invalid hardware settings XML: {error}"))?
-        {
+            .map_err(|error| format!("invalid hardware settings XML: {error}"))?;
+        let insert_here = add_audio
+            && match &event {
+                Event::Start(element) | Event::Empty(element) => {
+                    depth == 1 && element.name().as_ref() == b"graphics_card"
+                }
+                Event::End(_) => depth == 1,
+                _ => false,
+            };
+        if insert_here {
+            let out = writer.get_mut();
+            out.extend_from_slice(AUDIO_CARD.as_bytes());
+            out.extend_from_slice(indent.as_bytes());
+            add_audio = false;
+        }
+        match &event {
+            Event::Text(text) => {
+                let text = text.decode().map_err(|error| error.to_string())?;
+                indent = if text.trim().is_empty() {
+                    text.into_owned()
+                } else {
+                    String::new()
+                };
+            }
+            Event::Start(_) => {
+                depth += 1;
+                indent.clear();
+            }
+            Event::End(_) => {
+                depth = depth.saturating_sub(1);
+                indent.clear();
+            }
+            _ => indent.clear(),
+        }
+        match event {
             Event::Eof => break,
             Event::Start(mut element) => {
                 configure_tag(&mut element, picture, selection);
@@ -545,12 +611,38 @@ mod tests {
 
     #[test]
     fn unrelated_player_settings_survive() {
-        let input = DEFAULT_CONFIG
-            .replace("level=\"1.0\"", "level=\"1.3\"")
-            .replace("voices=\"40\"", "voices=\"80\"");
+        let input = DEFAULT_CONFIG.replace("level=\"1.0\"", "level=\"1.3\"").replace(
+            "<graphics_card>",
+            "<audio_card><audio mixing=\"creative\" reverbs=\"1\" voices=\"80\" /></audio_card>\n  <graphics_card>",
+        );
         let output = configure_xml(&input, &picture(), select_workers(Workers::Auto, 8)).unwrap();
         assert!(output.contains("gamma level=\"1.3\""));
         assert!(output.contains("workerMap8Core.xml"));
+        assert!(output.contains("<audio mixing=\"creative\" reverbs=\"1\" voices=\"80\""));
+        assert_eq!(output.matches("<audio_card").count(), 1);
+    }
+
+    /// DiRT's Options menu reads the audio settings from the cache; with no
+    /// `<audio_card>` it dereferences a null pointer (rea-dirt#1). Caches
+    /// made by v0.1.0 to v0.3.4 have none.
+    #[test]
+    fn a_cache_without_audio_settings_gets_the_games_default() {
+        let output =
+            configure_xml(DEFAULT_CONFIG, &picture(), select_workers(Workers::Auto, 8)).unwrap();
+        assert_eq!(output.matches("<audio_card>").count(), 1);
+        assert!(output.contains(
+            "<audio_card><audio mixing=\"software\" reverbs=\"0\" voices=\"40\" /></audio_card>\n  <graphics_card>"
+        ));
+        let twice = configure_xml(&output, &picture(), select_workers(Workers::Auto, 8)).unwrap();
+        assert_eq!(output, twice);
+    }
+
+    #[test]
+    fn audio_settings_go_before_the_end_when_there_is_no_graphics_card() {
+        let input = "<hardware_settings_config version=\"30\">\n  <cpu><threadStrategy /></cpu>\n</hardware_settings_config>\n";
+        let output = configure_xml(input, &picture(), select_workers(Workers::Auto, 8)).unwrap();
+        assert!(output.contains("</cpu>\n<audio_card><audio mixing=\"software\""));
+        assert!(output.ends_with("</audio_card>\n</hardware_settings_config>\n"));
     }
 
     #[test]
@@ -578,6 +670,7 @@ mod tests {
         .unwrap();
         assert!(cached.contains("width=\"3840\""));
         assert!(cached.contains("workerMap12Core.xml"));
+        assert!(cached.contains("<audio mixing=\"software\""));
         fs::remove_dir_all(runtime).unwrap();
     }
 }

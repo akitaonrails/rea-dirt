@@ -298,6 +298,7 @@ large-address-aware: Lets the 32-bit game use up to 4 GB of memory
 <?xml version="1.0" encoding="UTF-8"?>
 <hardware_settings_config version="30">
   <cpu><threadStrategy parallelUpdateRender="true" workerMapFile="system/workerMap4Core.xml" forceFeedbackProcessor="3" dvdStorageProcessor="3" dataSetMonitorProcessor="1" renderProcessor="0" updateProcessor="2" fileStreamProcessor="3"/></cpu>
+  <audio_card><audio mixing="software" reverbs="0" voices="40" /></audio_card>
   <graphics_card>
     <resolution width="1600" height="1200" aspect="4:3" fullscreen="true" vsync="1"><refreshRate rate="60"/></resolution>
     <gamma level="1.0" />

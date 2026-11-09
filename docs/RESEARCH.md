@@ -83,7 +83,9 @@ so an old cached map cannot override the repair.
 DiRT already offers 16:9, 16:10, 4:3, and 5:4 aspects and Medium/High/Ultra
 presets. The launcher edits only these owned values plus resolution,
 fullscreen, 60 Hz vsync, and the worker strategy. Audio, gamma, motion telemetry,
-and unknown XML fields are retained. Ultra uses 4× MSAA, 2048 shadows, 6000
+and unknown XML fields are retained. A file with no `<audio_card>` gets
+the game's own default one (software mixing, 40 voices): DiRT's Options
+menu crashes without it (rea-dirt#1, `RUNTIME_NOTES.md` 2026-11-09). Ultra uses 4× MSAA, 2048 shadows, 6000
 particles, 25,000 clip distance, high vehicle detail, and 512 reflections.
 
 `rea-colin-mcrae-3` measured raw Wine exclusive fullscreen selecting a portrait

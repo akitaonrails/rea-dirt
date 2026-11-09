@@ -186,3 +186,25 @@ Logs: `.work/realgame/logs/v041-*/`.
 Not checked: a race, sound itself, native Windows, Proton, a Steam Deck.
 The fresh prefix had no profile, so the first own-Quit attempt landed in
 the new-profile screens; it was rerun after a profile was created.
+
+## 2026-11-09: Options menu crash (rea-dirt#1)
+
+Real game, headless, same setup as 2026-11-03 (the owner's v1.22 install
+read only, a fresh throwaway prefix and runtime copy under
+`.work/realgame/`, `env -i`, finite timeouts, `gamescope --backend
+headless`, a private PipeWire null sink). `DiRTLauncher.exe` built at
+v0.3.4 and then with the fix. Logs: `.work/realgame/logs/i1-*/`.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Options from the main menu, v0.3.4 | **REPRODUCED**: DiRT.exe crashes as the menu opens, `c0000005` reading `0x00000044` at `007239E4` (`+seh`); the same exit code as the report | `i1-g/`, `i1-h/play.log` |
+| Cause | **VERIFIED**: the launcher-made `hardwaresettings/hardware_settings_config.xml` (from `DEFAULT_CONFIG`) had no `<audio_card>`; the game's own default has one. Adding DiRT's default `<audio_card>` by hand to that file alone made Options open | `i1-h/runtime-cache-before.xml`, `i1-i/` |
+| Fix, starting from the v0.3.4 file | **VERIFIED**: the launcher adds `<audio_card>` to the runtime cache and the Documents copy; Options, Control Setup, Graphics Setup, Sound Setup (mixing Software) and Bonus Codes all open; the game runs on and stops cleanly | `i1-j/` |
+
+Patch 1.1's notes name the same symptom ("entering the options menu ...
+with no active sound card present would cause the game to crash"): the
+menu needs audio settings to exist.
+
+Not checked: native Windows (the report's platform), changing and
+accepting a setting in each menu.
+

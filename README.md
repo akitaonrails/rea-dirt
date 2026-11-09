@@ -167,7 +167,9 @@ underscores) and on the command line (with hyphens); `DiRTLauncher.exe
 Unset means the launcher's default above. The launcher writes these values
 into DiRT's hardware settings on every start, so change them in the
 launcher, not in the game's menu. Sound, controls, gamma and the
-rest of your in-game settings stay yours.
+rest of your in-game settings stay yours (when the file has no sound
+settings yet, the launcher adds DiRT's own defaults, which the game's
+Options menu needs).
 
 Any option on the command line skips the window and plays; options
 override `launcher.cfg` for that run only, and only `--game` is

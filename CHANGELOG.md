@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+
+- The game no longer crashes when you open **Options** in the main menu
+  ([#1](https://github.com/akitaonrails/rea-dirt/issues/1)). The settings
+  file the launcher made for DiRT had no sound settings, and DiRT's
+  Options menu crashes when they are missing. The launcher now adds
+  DiRT's own default sound settings (software mixing, 40 voices) when the
+  file has none, and leaves your own sound settings alone. Players who
+  already have this file get the fix at their next launch.
+
 ## v0.3.4 - 2026-11-07
 
 ### Changed
