@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.3.5 - 2026-11-09
+
 ### Fixed
 
 - The game no longer crashes when you open **Options** in the main menu
