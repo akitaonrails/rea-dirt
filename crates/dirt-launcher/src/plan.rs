@@ -53,8 +53,9 @@ pub struct Plan {
     pub scaler: Scaler,
     /// Put the bundled DXVK `d3d9.dll` into the private copy.
     pub install_dxvk: bool,
-    /// `WINEDLLOVERRIDES` for the game, when it changes (kept, but Wine
-    /// ignores it in a child's environment block: see `app_dlls`).
+    /// `WINEDLLOVERRIDES` for the game under Wine, when it changes (kept,
+    /// but Wine ignores it in a child's environment block: see `app_dlls`);
+    /// never on native Windows.
     pub dll_overrides: Option<String>,
     /// Under Wine, the DLLs that get `native,builtin` in
     /// `HKCU\Software\Wine\AppDefaults\DiRT.exe\DllOverrides` (SDK
@@ -87,7 +88,7 @@ pub fn plan(settings: &Settings, env: &Env) -> Plan {
 
     let dxvk = env.linux;
     let native = crate::directx::override_names(&env.directx);
-    let dll_overrides = if dxvk || !native.is_empty() {
+    let dll_overrides = if env.wine && (dxvk || !native.is_empty()) {
         let mut list: Vec<&str> = Vec::new();
         if dxvk {
             list.push("d3d9");
@@ -306,9 +307,28 @@ mod tests {
         assert!(plan_p.app_dlls.is_empty());
         assert!(plan_p.app_dlls_off.contains(&"d3d9".to_string()));
         assert!(plan_p.app_dlls_off.contains(&"d3dx9_33".to_string()));
-        // Native Windows: no Wine settings at all, the fast GPU instead.
+        // Native Windows: no Wine settings at all, the fast GPU instead;
+        // the downloaded DirectX files are simply next to DiRT.exe, with no
+        // WINEDLLOVERRIDES (it read as a Wine run in a Windows 11
+        // launcher.log, rea-dirt#1).
         let plan_w = plan(&Settings::default(), &windows());
         assert!(plan_w.app_dlls.is_empty() && plan_w.app_dlls_off.is_empty());
+        let directx = vec!["d3dx9_33.dll".to_string(), "xinput1_3.dll".to_string()];
+        let plan_wdx = plan(
+            &Settings::default(),
+            &Env {
+                directx: directx.clone(),
+                ..windows()
+            },
+        );
+        assert_eq!(plan_wdx.dll_overrides, None);
+        assert!(plan_wdx.app_dlls.is_empty());
+        // Under Proton the same files are asked for before Wine's own.
+        let plan_pdx = plan(&Settings::default(), &Env { directx, ..proton });
+        assert_eq!(
+            plan_pdx.dll_overrides.as_deref(),
+            Some("d3dx9_33,xinput1_3=n,b;mscoree,mshtml=")
+        );
         assert!(plan_w.gpu_preference && !plan_l.gpu_preference);
     }
 

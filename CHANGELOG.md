@@ -11,6 +11,9 @@
   DiRT's own default sound settings (software mixing, 40 voices) when the
   file has none, and leaves your own sound settings alone. Players who
   already have this file get the fix at their next launch.
+- On native Windows, `launcher.log` no longer shows `wine: DLL overrides`
+  lines after the DirectX 9 download: the launcher no longer sets that
+  Wine-only variable outside Wine.
 
 ## v0.3.4 - 2026-11-07
 
