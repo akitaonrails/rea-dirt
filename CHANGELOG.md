@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Replaced placeholder launcher icon with custom high-contrast 256×256 DiRT off-road artwork for Windows executable and Linux AppImage shortcuts.
+
 ## v0.3.5 - 2026-11-09
 
 ### Fixed
